@@ -44,7 +44,6 @@
             </modules>
         </profile>
     </profiles>
-
     
     <dependencies>
         <dependency>
