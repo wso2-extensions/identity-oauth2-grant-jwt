@@ -26,7 +26,7 @@
 
     <artifactId>org.wso2.carbon.identity.oauth2.grant.jwt.feature</artifactId>
     <packaging>pom</packaging>
-    <name>WSO2 Carbon - identity Tiqr OTP Feature</name>
+    <name>WSO2 Carbon - identity JWT Grant Type Feature</name>
     <url>http://wso2.org</url>
     <description>This feature contains extension feature for JWT Grant Type</description>
 
@@ -52,7 +52,7 @@
                             <goal>p2-feature-gen</goal>
                         </goals>
                         <configuration>
-                            <id>org.wso2.carbon.extension.identity.authenticator.tiqr.connector</id>
+                            <id>org.wso2.carbon.identity.oauth2.grant.jwt</id>
                             <propertiesFile>feature.properties</propertiesFile>
                             <adviceFile>
                                 <properties>
