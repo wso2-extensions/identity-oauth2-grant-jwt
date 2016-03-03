@@ -20,7 +20,7 @@ Deploying and Configuring JWT grant-type artifacts:
 3. To register the JWT grant type, configure the <IS_HOME>/repository/conf/identity/identity.xml file by adding a new entry under the <OAuth><SupportedGrantTypes> element. Add a unique identifier between the <GrantTypeName> tags as seen in the code block below.
 	<SupportedGrantType>
    	    <GrantTypeName>urn:ietf:params:oauth:grant-type:jwt-bearer</GrantTypeName>
-        <GrantTypeHandlerImplClass>org.wso2.carbon.identity.oauth2.grant.jwt.JWTBearerGrantHandler</GrantTypeHandlerImplClass>
-        <GrantTypeValidatorImplClass>org.wso2.carbon.identity.oauth2.grant.jwt.JWTGrantValidator</GrantTypeValidatorImplClass>
-    </SupportedGrantType>
+            <GrantTypeHandlerImplClass>org.wso2.carbon.identity.oauth2.grant.jwt.JWTBearerGrantHandler</GrantTypeHandlerImplClass>
+            <GrantTypeValidatorImplClass>org.wso2.carbon.identity.oauth2.grant.jwt.JWTGrantValidator</GrantTypeValidatorImplClass>
+        </SupportedGrantType>
 
