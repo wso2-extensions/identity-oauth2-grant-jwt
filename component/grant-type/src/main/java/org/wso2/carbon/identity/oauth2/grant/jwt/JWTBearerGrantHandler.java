@@ -174,6 +174,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             }
 
             tokReqMsgCtx.setAuthorizedUser(AuthenticatedUser.createLocalAuthenticatedUserFromSubjectIdentifier(subject));
+            tokReqMsgCtx.setScope(tokReqMsgCtx.getOauth2AccessTokenReqDTO().getScope());
             if (log.isDebugEnabled()) {
                 log.debug("Subject(sub) found in JWT: " + subject);
                 log.debug(subject + " set as the Authorized User.");
