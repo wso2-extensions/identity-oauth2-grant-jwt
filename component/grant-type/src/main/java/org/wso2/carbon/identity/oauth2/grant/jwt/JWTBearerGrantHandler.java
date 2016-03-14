@@ -33,9 +33,9 @@ import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationManagementUtil;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
+import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCache;
 import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCacheEntry;
-import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.model.RequestParameter;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import org.wso2.carbon.identity.oauth2.token.handlers.grant.AbstractAuthorizationGrantHandler;
@@ -45,7 +45,6 @@ import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.NumberFormatException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
@@ -152,8 +151,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         long currentTimeInMillis = System.currentTimeMillis();
         long timeStampSkewMillis = OAuthServerConfiguration.getInstance().getTimeStampSkewInSeconds() * 1000;
 
-        if (StringUtils.isEmpty(jwtIssuer) || StringUtils.isEmpty(subject) || expirationTime == null) {
-            handleException("Mandatory fields(Issuer, Subject or Expiration time) are empty in the given JSON Web Token.");
+        if (StringUtils.isEmpty(jwtIssuer) || StringUtils.isEmpty(subject) || expirationTime == null || audience == null) {
+            handleException("Mandatory fields(Issuer, Subject, Expiration time or Audience) are empty in the given JSON Web Token.");
         }
 
         try {
