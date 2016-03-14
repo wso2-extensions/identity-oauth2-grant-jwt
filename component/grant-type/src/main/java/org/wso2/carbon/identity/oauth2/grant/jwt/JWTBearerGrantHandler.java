@@ -195,22 +195,37 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             if (!audienceFound) {
                 handleException("None of the audience values matched the tokenEndpoint Alias " + tokenEndPointAlias);
             }
-            boolean checkedExpirationTime = checkExpirationTime(expirationTime, currentTimeInMillis, timeStampSkewMillis);
+            boolean checkedExpirationTime = checkExpirationTime(expirationTime, currentTimeInMillis,
+                    timeStampSkewMillis);
             if (checkedExpirationTime) {
                 if (log.isDebugEnabled()) {
                     log.debug("Expiration Time(exp) of JWT was validated successfully.");
                 }
             }
-            boolean checkedNotBeforeTime = checkNotBeforeTime(notBeforeTime, currentTimeInMillis, timeStampSkewMillis);
-            if (checkedNotBeforeTime) {
+            if (notBeforeTime == null) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Not Before Time(nbf) of JWT was validated successfully.");
+                    log.debug("Not Before Time(nbf) not found in JWT. Continuing Validation");
+                }
+            } else {
+                boolean checkedNotBeforeTime = checkNotBeforeTime(notBeforeTime, currentTimeInMillis,
+                        timeStampSkewMillis);
+                if (checkedNotBeforeTime) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Not Before Time(nbf) of JWT was validated successfully.");
+                    }
                 }
             }
-            boolean checkedValidityToken = checkValidityOfTheToken(issuedAtTime, currentTimeInMillis, timeStampSkewMillis);
-            if (checkedValidityToken) {
+            if (issuedAtTime == null) {
                 if (log.isDebugEnabled()) {
-                    log.debug("Issued At Time(iat) of JWT was validated successfully.");
+                    log.debug("Issued At Time(iat) not found in JWT. Continuing Validation");
+                }
+            } else {
+                boolean checkedValidityToken = checkValidityOfTheToken(issuedAtTime, currentTimeInMillis,
+                        timeStampSkewMillis);
+                if (checkedValidityToken) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Issued At Time(iat) of JWT was validated successfully.");
+                    }
                 }
             }
             if (cacheUsedJTI && (jti != null)) {
