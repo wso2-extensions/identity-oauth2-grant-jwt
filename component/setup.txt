@@ -40,5 +40,4 @@ Deploying and Configuring JWT grant-type artifacts:
     - The OAuth Client Key and OAuth Client Secret will now be visible.
 
 6. The cURL command below can be used to retrieve access token and refresh token using a JWT.
-    curl -i -X POST -u <clientid>:<clientsecret> -k -d 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=<JWT>'
-                -H 'Content-Type: application/x-www-form-urlencoded' https://localhost:9443/oauth2/token
+    curl -i -X POST -u <clientid>:<clientsecret> -k -d 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=<JWT>' -H 'Content-Type: application/x-www-form-urlencoded' https://localhost:9443/oauth2/token
