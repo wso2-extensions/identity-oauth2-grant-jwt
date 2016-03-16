@@ -154,7 +154,6 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         if (StringUtils.isEmpty(jwtIssuer) || StringUtils.isEmpty(subject) || expirationTime == null || audience == null) {
             handleException("Mandatory fields(Issuer, Subject, Expiration time or Audience) are empty in the given JSON Web Token.");
         }
-
         try {
             identityProvider = IdentityProviderManager.getInstance().getIdPByName(jwtIssuer, tenantDomain);
             if (identityProvider != null) {
@@ -173,14 +172,16 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             }
 
             tokReqMsgCtx.setAuthorizedUser(AuthenticatedUser.createLocalAuthenticatedUserFromSubjectIdentifier(subject));
-            tokReqMsgCtx.setScope(tokReqMsgCtx.getOauth2AccessTokenReqDTO().getScope());
             if (log.isDebugEnabled()) {
                 log.debug("Subject(sub) found in JWT: " + subject);
                 log.debug(subject + " set as the Authorized User.");
             }
 
+            tokReqMsgCtx.setScope(tokReqMsgCtx.getOauth2AccessTokenReqDTO().getScope());
+
             if (StringUtils.isEmpty(tokenEndPointAlias)) {
-                handleException("Token End Point of the IDP is empty.");
+                handleException("Token Endpoint alias of the local Identity Provider has not been " +
+                        "configured for " + identityProvider.getIdentityProviderName());
             }
             for (String aud : audience) {
                 if (StringUtils.equals(tokenEndPointAlias, aud)) {
@@ -501,28 +502,32 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     + idp.getIdentityProviderName() + " for tenant domain " + tenantDomain);
         }
         String alg = signedJWT.getHeader().getAlgorithm().getName();
-        if (log.isDebugEnabled()) {
-            log.debug("Signature Algorithm found in the JWT Header: " + alg);
-        }
-        if (alg.indexOf("RS") == 0) {
-            RSAPublicKey publicKey = null;
-            if (x509Certificate != null) {
-                publicKey = (RSAPublicKey) x509Certificate.getPublicKey();
-            } else {
-                handleException("Unable to get certificate");
-            }
-            if (publicKey != null) {
-                verifier = new RSASSAVerifier(publicKey);
-            } else {
-                handleException("Public key is null");
-            }
+        if(StringUtils.isEmpty(alg)){
+            handleException("Algorithm must not be null.");
         } else {
             if (log.isDebugEnabled()) {
-                log.debug("Signature Algorithm not supported yet : " + alg);
+                log.debug("Signature Algorithm found in the JWT Header: " + alg);
             }
-        }
-        if (verifier == null) {
-            handleException("Could not create a signature verifier for algorithm type: " + alg);
+            if (alg.indexOf("RS") == 0) {
+                RSAPublicKey publicKey = null;
+                if (x509Certificate != null) {
+                    publicKey = (RSAPublicKey) x509Certificate.getPublicKey();
+                } else {
+                    handleException("Unable to get certificate");
+                }
+                if (publicKey != null) {
+                    verifier = new RSASSAVerifier(publicKey);
+                } else {
+                    handleException("Public key is null");
+                }
+            } else {
+                if (log.isDebugEnabled()) {
+                    log.debug("Signature Algorithm not supported yet : " + alg);
+                }
+            }
+            if (verifier == null) {
+                handleException("Could not create a signature verifier for algorithm type: " + alg);
+            }
         }
         return verifier != null && signedJWT.verify(verifier);
     }
