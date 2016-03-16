@@ -24,3 +24,21 @@ Deploying and Configuring JWT grant-type artifacts:
             <GrantTypeValidatorImplClass>org.wso2.carbon.identity.oauth2.grant.jwt.JWTGrantValidator</GrantTypeValidatorImplClass>
         </SupportedGrantType>
 
+4. Add an Identity Provider with the issuer name.
+    - Log in to the API Manager's management console (https://localhost:9443/carbon) using admin/admin credentials and select Add under Identity Providers menu in the Main menu.
+        - Provide the following values to configure the IDP:
+           - Under Basic Information
+                - Identity Provider Name: Enter a unique name for IDP
+                - Identity Provider Public Certificate: The certificate used to sign the JWT assertion.
+                - Alias: Give the name of the alias if the Identity Provider identifies this token endpoint by an alias. E.g., https://localhost:9443/oauth2/token
+
+5. Add service provider
+    - Select Add under Service Providers menu in the Main menu.
+    - Fill in the Service Provider Name and provide a brief Description of the service provider.
+    - Expand the OAuth/OpenID Connect Configuration and click Configure.
+    - Enter a callback url for example http://localhost:8080/playground2/oauth2client and click Add.
+    - The OAuth Client Key and OAuth Client Secret will now be visible.
+
+6. The cURL command below can be used to retrieve access token and refresh token using a JWT.
+    curl -i -X POST -u <clientid>:<clientsecret> -k -d 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=<JWT>'
+                -H 'Content-Type: application/x-www-form-urlencoded' https://localhost:9443/oauth2/token
