@@ -27,7 +27,7 @@
 
     <groupId>org.wso2.carbon.identity</groupId>
     <artifactId>org.wso2.carbon.identity.oauth2.jwt</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>WSO2 Carbon Extension - JWT Grant Type Pom</name>
     <url>http://wso2.org</url>
@@ -48,7 +48,7 @@
         <connection>scm:git:https://github.com/wso2-extensions/identity-oauth2-grant-jwt.git</connection>
         <url>https://github.com/wso2-extensions/identity-oauth2-grant-jwt.git</url>
         <developerConnection>scm:git:https://github.com/wso2-extensions/identity-oauth2-grant-jwt.git</developerConnection>
-        <tag>org.wso2.carbon.identity.oauth2.jwt-1.0.0</tag>
+        <tag>HEAD</tag>
     </scm>
     <dependencies>
         <dependency>
