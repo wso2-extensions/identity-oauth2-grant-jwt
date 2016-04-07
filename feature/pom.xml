@@ -69,4 +69,8 @@
             </plugin>
         </plugins>
     </build>
+
+  <scm>
+    <tag>org.wso2.carbon.identity.oauth2.jwt-1.0.0</tag>
+  </scm>
 </project>
