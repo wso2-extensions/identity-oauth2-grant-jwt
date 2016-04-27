@@ -16,22 +16,20 @@
  ~ specific language governing permissions and limitations
  ~ under the License.
 	 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
-
     <parent>
         <groupId>org.wso2</groupId>
         <artifactId>wso2</artifactId>
         <version>1</version>
     </parent>
-
     <groupId>org.wso2.carbon.identity</groupId>
     <artifactId>org.wso2.carbon.identity.oauth2.jwt</artifactId>
     <version>1.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>WSO2 Carbon Extension - JWT Grant Type Pom</name>
     <url>http://wso2.org</url>
-
     <profiles>
         <profile>
             <id>default</id>
@@ -47,7 +45,8 @@
     <scm>
         <connection>scm:git:https://github.com/wso2-extensions/identity-oauth2-grant-jwt.git</connection>
         <url>https://github.com/wso2-extensions/identity-oauth2-grant-jwt.git</url>
-        <developerConnection>scm:git:https://github.com/wso2-extensions/identity-oauth2-grant-jwt.git</developerConnection>
+        <developerConnection>scm:git:https://github.com/wso2-extensions/identity-oauth2-grant-jwt.git
+        </developerConnection>
         <tag>HEAD</tag>
     </scm>
     <dependencies>
@@ -61,7 +60,7 @@
             <artifactId>org.wso2.carbon.logging</artifactId>
             <version>${commons-logging.version}</version>
         </dependency>
-        <dependency>   
+        <dependency>
             <groupId>org.wso2.carbon.identity</groupId>
             <artifactId>org.wso2.carbon.identity.application.common</artifactId>
             <version>${carbon.identity.version}</version>
@@ -173,17 +172,17 @@
             <version>${carbon.identity.version}</version>
             <scope>provided</scope>
         </dependency>
-         <dependency>
+        <dependency>
             <groupId>com.nimbusds.wso2</groupId>
             <artifactId>nimbus-jose-jwt</artifactId>
             <version>${nimbusds.version}</version>
         </dependency>
-         <dependency>
+        <dependency>
             <groupId>org.wso2.orbit.org.apache.oltu.oauth2</groupId>
             <artifactId>oltu</artifactId>
             <version>${oltu.version}</version>
         </dependency>
-         <dependency>
+        <dependency>
             <groupId>org.wso2.carbon.identity</groupId>
             <artifactId>org.wso2.carbon.identity.oauth</artifactId>
             <version>${carbon.identity.version}</version>
@@ -205,7 +204,6 @@
             <version>${encoder.wso2.version}</version>
         </dependency>
     </dependencies>
-
     <build>
         <extensions>
             <extension>
@@ -250,7 +248,6 @@
                 </configuration>
             </plugin>
         </plugins>
-
         <pluginManagement>
             <plugins>
                 <plugin>

@@ -24,7 +24,6 @@ import com.nimbusds.jose.ReadOnlyJWSHeader;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.ReadOnlyJWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
-
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -65,8 +64,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static Log log = LogFactory.getLog(JWTBearerGrantHandler.class);
 
     private static String tenantDomain;
-    private JWTCache jwtCache;
     private static int validityPeriod;
+    private JWTCache jwtCache;
     private boolean cacheUsedJTI;
 
     /**
@@ -90,7 +89,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             }
         } catch (IOException e) {
             throw new IdentityOAuth2Exception("Can not find the file", e);
-        } catch (NumberFormatException e){
+        } catch (NumberFormatException e) {
             throw new IdentityOAuth2Exception("Invalid Validity period", e);
         } finally {
             try {
@@ -263,7 +262,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             if (log.isDebugEnabled()) {
                 log.debug("JWT Token was validated successfully");
             }
-            if(cacheUsedJTI) {
+            if (cacheUsedJTI) {
                 jwtCache.addToCache(jti, new JWTCacheEntry(signedJWT));
             }
             if (log.isDebugEnabled()) {
@@ -284,15 +283,15 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * the default implementation creates the subject from the Sub attribute.
      * To translate between the federated and local user store, this may need some mapping.
      * Override if needed
+     *
      * @param claimsSet all the JWT claims
      * @return The subject, to be used
      */
     protected String resolveSubject(ReadOnlyJWTClaimsSet claimsSet) {
-		return claimsSet.getSubject();
-	}
+        return claimsSet.getSubject();
+    }
 
-
-	/**
+    /**
      * @param tokReqMsgCtx Token message request context
      * @return signedJWT
      */
@@ -386,7 +385,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * authorization server may reject JWTs with an exp claim value that is unreasonably far in the
      * future.
      *
-     * @param expirationTime Expiration time
+     * @param expirationTime      Expiration time
      * @param currentTimeInMillis Current time
      * @param timeStampSkewMillis Time skew
      * @return true or false
@@ -406,7 +405,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * The JWT MAY contain an nbf (not before) claim that identifies the time before which the
      * token MUST NOT be accepted for processing.
      *
-     * @param notBeforeTime Not before time
+     * @param notBeforeTime       Not before time
      * @param currentTimeInMillis Current time
      * @param timeStampSkewMillis Time skew
      * @return true or false
@@ -427,7 +426,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * issued. Note that the authorization server may reject JWTs with an iat claim value that is
      * unreasonably far in the past
      *
-     * @param issuedAtTime Token issued time
+     * @param issuedAtTime        Token issued time
      * @param currentTimeInMillis Current time
      * @param timeStampSkewMillis Time skew
      * @return true or false
@@ -449,9 +448,9 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     /**
      * Method to check whether the JTI is already in the cache.
      *
-     * @param jti JSON Token Id
-     * @param signedJWT Signed JWT
-     * @param entry Cache entry
+     * @param jti                 JSON Token Id
+     * @param signedJWT           Signed JWT
+     * @param entry               Cache entry
      * @param currentTimeInMillis Current time
      * @param timeStampSkewMillis Skew time
      * @return true or false
@@ -508,12 +507,12 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         JWSVerifier verifier = null;
         ReadOnlyJWSHeader header = signedJWT.getHeader();
         X509Certificate x509Certificate = resolveSignerCertificate(header, idp);
-        if(x509Certificate==null) {
-            handleException("Unable to locate certificate for Identity Provider "+idp.getDisplayName()+"; JWT "+header.toString());
+        if (x509Certificate == null) {
+            handleException("Unable to locate certificate for Identity Provider " + idp.getDisplayName() + "; JWT " + header.toString());
         }
 
         String alg = signedJWT.getHeader().getAlgorithm().getName();
-        if(StringUtils.isEmpty(alg)){
+        if (StringUtils.isEmpty(alg)) {
             handleException("Algorithm must not be null.");
         } else {
             if (log.isDebugEnabled()) {
@@ -547,14 +546,15 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * The default implementation resolves one certificate to Identity Provider and ignores the JWT header.
      * Override this method, to resolve and enforce the certificate in any other way
      * such as x5t attribute of the header.
+     *
      * @param header The JWT header. Some of the x attributes may provide certificate information.
-     * @param idp The identity provider, if you need it.
+     * @param idp    The identity provider, if you need it.
      * @return the resolved X509 Certificate, to be used to validate the JWT signature.
      * @throws IdentityOAuth2Exception something goes wrong.
      */
     protected X509Certificate resolveSignerCertificate(ReadOnlyJWSHeader header,
-			IdentityProvider idp) throws IdentityOAuth2Exception {
-    	X509Certificate x509Certificate = null; 
+                                                       IdentityProvider idp) throws IdentityOAuth2Exception {
+        X509Certificate x509Certificate = null;
         try {
             x509Certificate = (X509Certificate) IdentityApplicationManagementUtil
                     .decodeCertificate(idp.getCertificate());
@@ -562,11 +562,10 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             handleException("Error occurred while decoding public certificate of Identity Provider "
                     + idp.getIdentityProviderName() + " for tenant domain " + tenantDomain);
         }
-		return x509Certificate;
-	}
+        return x509Certificate;
+    }
 
-
-	/**
+    /**
      * Method to validate the claims other than
      * iss - Issuer
      * sub - Subject
@@ -583,7 +582,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @param customClaims a map of custom claims
      * @return whether the token is valid based on other claim values
      */
-    protected boolean validateCustomClaims(Map<String, Object> customClaims) {
+    protected boolean validateCustomClaims(Map< String, Object > customClaims) {
         return true;
     }
 
