@@ -20,9 +20,11 @@ package org.wso2.carbon.identity.oauth2.grant.jwt;
 
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSVerifier;
+import com.nimbusds.jose.ReadOnlyJWSHeader;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.ReadOnlyJWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -139,7 +141,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         }
 
         String jwtIssuer = claimsSet.getIssuer();
-        String subject = claimsSet.getSubject();
+        String subject = resolveSubject(claimsSet);
         List<String> audience = claimsSet.getAudience();
         Date expirationTime = claimsSet.getExpirationTime();
         Date notBeforeTime = claimsSet.getNotBeforeTime();
@@ -279,6 +281,18 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     }
 
     /**
+     * the default implementation creates the subject from the Sub attribute.
+     * To translate between the federated and local user store, this may need some mapping.
+     * Override if needed
+     * @param claimsSet all the JWT claims
+     * @return The subject, to be used
+     */
+    protected String resolveSubject(ReadOnlyJWTClaimsSet claimsSet) {
+		return claimsSet.getSubject();
+	}
+
+
+	/**
      * @param tokReqMsgCtx Token message request context
      * @return signedJWT
      */
@@ -492,15 +506,12 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             throws JOSEException, IdentityOAuth2Exception {
 
         JWSVerifier verifier = null;
-        X509Certificate x509Certificate = null;
-
-        try {
-            x509Certificate = (X509Certificate) IdentityApplicationManagementUtil
-                    .decodeCertificate(idp.getCertificate());
-        } catch (CertificateException e) {
-            handleException("Error occurred while decoding public certificate of Identity Provider "
-                    + idp.getIdentityProviderName() + " for tenant domain " + tenantDomain);
+        ReadOnlyJWSHeader header = signedJWT.getHeader();
+        X509Certificate x509Certificate = resolveSignerCertificate(header, idp);
+        if(x509Certificate==null) {
+            handleException("Unable to locate certificate for Identity Provider "+idp.getDisplayName()+"; JWT "+header.toString());
         }
+
         String alg = signedJWT.getHeader().getAlgorithm().getName();
         if(StringUtils.isEmpty(alg)){
             handleException("Algorithm must not be null.");
@@ -533,6 +544,29 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     }
 
     /**
+     * The default implementation resolves one certificate to Identity Provider and ignores the JWT header.
+     * Override this method, to resolve and enforce the certificate in any other way
+     * such as x5t attribute of the header.
+     * @param header The JWT header. Some of the x attributes may provide certificate information.
+     * @param idp The identity provider, if you need it.
+     * @return the resolved X509 Certificate, to be used to validate the JWT signature.
+     * @throws IdentityOAuth2Exception something goes wrong.
+     */
+    protected X509Certificate resolveSignerCertificate(ReadOnlyJWSHeader header,
+			IdentityProvider idp) throws IdentityOAuth2Exception {
+    	X509Certificate x509Certificate = null; 
+        try {
+            x509Certificate = (X509Certificate) IdentityApplicationManagementUtil
+                    .decodeCertificate(idp.getCertificate());
+        } catch (CertificateException e) {
+            handleException("Error occurred while decoding public certificate of Identity Provider "
+                    + idp.getIdentityProviderName() + " for tenant domain " + tenantDomain);
+        }
+		return x509Certificate;
+	}
+
+
+	/**
      * Method to validate the claims other than
      * iss - Issuer
      * sub - Subject
