@@ -19,12 +19,12 @@ package org.wso2.carbon.identity.oauth2.grant.jwt.internal;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.oltu.oauth2.common.validators.OAuthValidator;
 import org.osgi.service.component.ComponentContext;
 import org.wso2.carbon.context.PrivilegedCarbonContext;
 import org.wso2.carbon.identity.oauth2.grant.jwt.JWTBearerGrantHandler;
 import org.wso2.carbon.identity.oauth2.grant.jwt.JWTGrantValidator;
 import org.wso2.carbon.identity.oauth2.token.handlers.grant.AuthorizationGrantHandler;
-import org.apache.oltu.oauth2.common.validators.OAuthValidator;
 import org.wso2.carbon.user.core.service.RealmService;
 
 import java.util.Hashtable;
@@ -35,10 +35,15 @@ import java.util.Hashtable;
 public class JWTServiceComponent {
     private static Log log = LogFactory.getLog(JWTServiceComponent.class);
 
+    public static RealmService getRealmService() {
+        return (RealmService) PrivilegedCarbonContext.getThreadLocalCarbonContext()
+                .getOSGiService(RealmService.class);
+    }
+
     protected void activate(ComponentContext ctxt) {
         try {
             JWTBearerGrantHandler grantHandler = new JWTBearerGrantHandler();
-            Hashtable<String, String> props = new Hashtable<String, String>();
+            Hashtable<String, String> props = new Hashtable< String, String >();
             ctxt.getBundleContext().registerService(AuthorizationGrantHandler.class.getName(),
                     grantHandler, props);
 
@@ -56,10 +61,5 @@ public class JWTServiceComponent {
         if (log.isDebugEnabled()) {
             log.debug("JWT grant handler is deactivated");
         }
-    }
-
-    public static RealmService getRealmService() {
-        return (RealmService) PrivilegedCarbonContext.getThreadLocalCarbonContext()
-                .getOSGiService(RealmService.class);
     }
 }
