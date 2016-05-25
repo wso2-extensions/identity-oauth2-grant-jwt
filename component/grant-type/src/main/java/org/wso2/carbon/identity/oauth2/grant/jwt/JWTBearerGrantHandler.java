@@ -33,6 +33,7 @@ import org.wso2.carbon.identity.application.common.model.IdentityProvider;
 import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationManagementUtil;
+import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCache;
@@ -40,6 +41,7 @@ import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCacheEntry;
 import org.wso2.carbon.identity.oauth2.model.RequestParameter;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import org.wso2.carbon.identity.oauth2.token.handlers.grant.AbstractAuthorizationGrantHandler;
+import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.idp.mgt.IdentityProviderManagementException;
 import org.wso2.carbon.idp.mgt.IdentityProviderManager;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
@@ -61,6 +63,7 @@ import java.util.Properties;
  */
 public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
+    private static final String OAUTH_SPLIT_AUTHZ_USER_3_WAY = "OAuth.SplitAuthzUser3Way";
     private static Log log = LogFactory.getLog(JWTBearerGrantHandler.class);
 
     private static String tenantDomain;
@@ -172,7 +175,12 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 handleException("Signature or Message Authentication invalid.");
             }
 
-            tokReqMsgCtx.setAuthorizedUser(AuthenticatedUser.createLocalAuthenticatedUserFromSubjectIdentifier(subject));
+            if (Boolean.parseBoolean(IdentityUtil.getProperty(OAUTH_SPLIT_AUTHZ_USER_3_WAY))) {
+                tokReqMsgCtx.setAuthorizedUser(OAuth2Util.getUserFromUserName(subject));
+            } else {
+                tokReqMsgCtx.setAuthorizedUser(AuthenticatedUser
+                        .createLocalAuthenticatedUserFromSubjectIdentifier(subject));
+            }
             if (log.isDebugEnabled()) {
                 log.debug("Subject(sub) found in JWT: " + subject);
                 log.debug(subject + " set as the Authorized User.");
