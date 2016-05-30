@@ -19,11 +19,11 @@
     <parent>
         <groupId>org.wso2.carbon.identity</groupId>
         <artifactId>org.wso2.carbon.identity.oauth2.jwt</artifactId>
-        <version>1.0.2-SNAPSHOT</version>
+        <version>1.0.2</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
     <artifactId>org.wso2.carbon.identity.oauth2.grant.jwt.feature</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.2</version>
     <packaging>pom</packaging>
     <name>WSO2 Carbon - identity JWT Grant Type Feature</name>
     <url>http://wso2.org</url>
@@ -32,7 +32,7 @@
         <dependency>
             <groupId>org.wso2.carbon.identity</groupId>
             <artifactId>org.wso2.carbon.identity.oauth2.grant.jwt</artifactId>
-            <version>1.0.2-SNAPSHOT</version>
+            <version>1.0.2</version>
         </dependency>
     </dependencies>
     <build>

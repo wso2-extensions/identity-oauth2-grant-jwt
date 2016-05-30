@@ -41,3 +41,5 @@ Deploying and Configuring JWT grant-type artifacts:
 
 6. The cURL command below can be used to retrieve access token and refresh token using a JWT.
     curl -i -X POST -u <clientid>:<clientsecret> -k -d 'grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=<JWT>' -H 'Content-Type: application/x-www-form-urlencoded' https://localhost:9443/oauth2/token
+
+7. To store AUTHZ_USER and USER_DOMAIN separately, Add SplitAuthzUser3Way property to the OAuth section of <IS_HOME>/repository/conf/identity/identity.xml file as follows: <SplitAuthzUser3Way>true</SplitAuthzUser3Way>
