@@ -122,7 +122,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      */
     @Override
     public boolean validateGrant(OAuthTokenReqMessageContext tokReqMsgCtx) throws IdentityOAuth2Exception {
-        super.validateGrant(tokReqMsgCtx);
+//        super.validateGrant(tokReqMsgCtx); //This line was commented to work with IS 5.2.0
 
         SignedJWT signedJWT;
         IdentityProvider identityProvider;
