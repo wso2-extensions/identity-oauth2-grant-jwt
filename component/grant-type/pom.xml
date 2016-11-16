@@ -21,8 +21,8 @@
     <name>JWT grant type for OAuth2</name>
     <url>http://wso2.org</url>
     <parent>
-        <groupId>org.wso2.carbon.identity</groupId>
-        <artifactId>org.wso2.carbon.identity.oauth2.jwt</artifactId>
+        <groupId>org.wso2.carbon.extension.identity.oauth2.grantType.jwt</groupId>
+        <artifactId>identity-inbound-oauth2-grant-jwt</artifactId>
         <version>1.0.3-SNAPSHOT</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>

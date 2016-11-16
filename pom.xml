@@ -23,8 +23,8 @@
         <artifactId>wso2</artifactId>
         <version>1</version>
     </parent>
-    <groupId>org.wso2.carbon.identity</groupId>
-    <artifactId>org.wso2.carbon.identity.oauth2.jwt</artifactId>
+    <groupId>org.wso2.carbon.extension.identity.oauth2.grantType.jwt</groupId>
+    <artifactId>identity-inbound-oauth2-grant-jwt</artifactId>
     <version>1.0.3-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>WSO2 Carbon Extension - JWT Grant Type Pom</name>

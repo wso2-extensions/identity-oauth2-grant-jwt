@@ -17,12 +17,12 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>org.wso2.carbon.identity</groupId>
-        <artifactId>org.wso2.carbon.identity.oauth2.jwt</artifactId>
+        <groupId>org.wso2.carbon.extension.identity.oauth2.grantType.jwt</groupId>
+        <artifactId>identity-inbound-oauth2-grant-jwt</artifactId>
         <version>1.0.3-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-    <artifactId>org.wso2.carbon.identity.oauth2.grant.jwt.feature</artifactId>
+    <artifactId>org.wso2.carbon.extension.identity.oauth2.jwt.feature</artifactId>
     <version>1.0.3-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>WSO2 Carbon - identity JWT Grant Type Feature</name>
@@ -30,7 +30,7 @@
     <description>This feature contains extension feature for JWT Grant Type</description>
     <dependencies>
         <dependency>
-            <groupId>org.wso2.carbon.identity</groupId>
+            <groupId>org.wso2.carbon.extension.identity.oauth2.grantType.jwt</groupId>
             <artifactId>org.wso2.carbon.identity.oauth2.grant.jwt</artifactId>
             <version>1.0.3-SNAPSHOT</version>
         </dependency>
@@ -58,7 +58,7 @@
                                 </properties>
                             </adviceFile>
                             <bundles>
-                                <bundleDef>org.wso2.carbon.identity:org.wso2.carbon.identity.oauth2.grant.jwt
+                                <bundleDef>org.wso2.carbon.extension.identity.oauth2.grantType.jwt:org.wso2.carbon.identity.oauth2.grant.jwt
                                 </bundleDef>
                             </bundles>
                         </configuration>
