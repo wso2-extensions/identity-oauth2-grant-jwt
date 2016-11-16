@@ -122,7 +122,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      */
     @Override
     public boolean validateGrant(OAuthTokenReqMessageContext tokReqMsgCtx) throws IdentityOAuth2Exception {
-        super.validateGrant(tokReqMsgCtx);
+//        super.validateGrant(tokReqMsgCtx);
 
         SignedJWT signedJWT;
         IdentityProvider identityProvider;
