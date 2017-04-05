@@ -64,6 +64,7 @@ import java.util.Properties;
 public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
     private static final String OAUTH_SPLIT_AUTHZ_USER_3_WAY = "OAuth.SplitAuthzUser3Way";
+    private static final String DEFAULT_IDP_NAME = "default";
     private static Log log = LogFactory.getLog(JWTBearerGrantHandler.class);
 
     private static String tenantDomain;
@@ -161,6 +162,13 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         try {
             identityProvider = IdentityProviderManager.getInstance().getIdPByName(jwtIssuer, tenantDomain);
             if (identityProvider != null) {
+                // if no IDPs were found for a given name, the IdentityProviderManager returns a dummy IDP with the
+                // name "default". We need to handle this case.
+                if (StringUtils.equalsIgnoreCase(identityProvider.getIdentityProviderName(), DEFAULT_IDP_NAME)) {
+                    log.error("Default IDP Found. This means a valid IDP was not found for issuer: " + jwtIssuer);
+                    handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
+                }
+
                 tokenEndPointAlias = getTokenEndpointAlias(identityProvider);
             } else {
                 handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
