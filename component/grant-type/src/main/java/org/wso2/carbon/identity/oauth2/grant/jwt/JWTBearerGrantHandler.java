@@ -107,12 +107,35 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         }
     }
 
-    private IdentityProvider getResidentIdp(String tenantDomain) throws IdentityOAuth2Exception {
+    /**
+     * get resident Identity Provider
+     *
+     * @param tenantDomain tenant Domain
+     * @param jwtIssuer    issuer extracted from assertion
+     * @return resident Identity Provider
+     * @throws IdentityOAuth2Exception
+     */
+    private IdentityProvider getIdentityProvider(String tenantDomain, String jwtIssuer) throws IdentityOAuth2Exception {
+        String issuer = StringUtils.EMPTY;
+        IdentityProvider residentIdentityProvider = null;
         try {
-            return IdentityProviderManager.getInstance().getResidentIdP(tenantDomain);
+            residentIdentityProvider = IdentityProviderManager.getInstance().getResidentIdP(tenantDomain);
         } catch (IdentityProviderManagementException e) {
             String errorMsg = String.format(ERROR_GET_RESIDENT_IDP, tenantDomain);
             throw new IdentityOAuth2Exception(errorMsg, e);
+        }
+        FederatedAuthenticatorConfig[] fedAuthnConfigs = residentIdentityProvider.getFederatedAuthenticatorConfigs();
+        FederatedAuthenticatorConfig oauthAuthenticatorConfig =
+                IdentityApplicationManagementUtil.getFederatedAuthenticator(fedAuthnConfigs,
+                        IdentityApplicationConstants.Authenticator.OIDC.NAME);
+        if (oauthAuthenticatorConfig != null) {
+            issuer = IdentityApplicationManagementUtil.getProperty(oauthAuthenticatorConfig.getProperties(),
+                    OPENID_IDP_ENTITY_ID).getValue();
+        }
+        if (jwtIssuer.equals(issuer)) {
+            return residentIdentityProvider;
+        } else {
+            return null;
         }
     }
 
@@ -172,28 +195,16 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             handleException("Mandatory fields(Issuer, Subject, Expiration time or Audience) are empty in the given JSON Web Token.");
         }
         try {
-            String issuer = StringUtils.EMPTY;
-            IdentityProvider residentIdentityProvider = getResidentIdp(tenantDomain);
-            FederatedAuthenticatorConfig[] fedAuthnConfigs = residentIdentityProvider.getFederatedAuthenticatorConfigs();
-            FederatedAuthenticatorConfig oauthAuthenticatorConfig =
-                    IdentityApplicationManagementUtil.getFederatedAuthenticator(fedAuthnConfigs,
-                            IdentityApplicationConstants.Authenticator.OIDC.NAME);
-            if (oauthAuthenticatorConfig != null) {
-                issuer = IdentityApplicationManagementUtil.getProperty(oauthAuthenticatorConfig.getProperties(),
-                        OPENID_IDP_ENTITY_ID).getValue();
-            }
-            if (jwtIssuer.equals(issuer)) {
-                //if id token is used as the assertion
-                identityProvider = IdentityProviderManager.getInstance().getResidentIdP(tenantDomain);
-            } else {
-                identityProvider = IdentityProviderManager.getInstance().getIdPByName(jwtIssuer, tenantDomain);
-            }
+            identityProvider = IdentityProviderManager.getInstance().getIdPByName(jwtIssuer, tenantDomain);
             if (identityProvider != null) {
                 // if no IDPs were found for a given name, the IdentityProviderManager returns a dummy IDP with the
                 // name "default". We need to handle this case.
                 if (StringUtils.equalsIgnoreCase(identityProvider.getIdentityProviderName(), DEFAULT_IDP_NAME)) {
-                    log.error("Default IDP Found. This means a valid IDP was not found for issuer: " + jwtIssuer);
-                    handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
+                    //if the id token is used as the assertion below code snippet will executed
+                    identityProvider = getIdentityProvider(tenantDomain, jwtIssuer);
+                    if (identityProvider == null) {
+                        handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
+                    }
                 }
 
                 tokenEndPointAlias = getTokenEndpointAlias(identityProvider);
