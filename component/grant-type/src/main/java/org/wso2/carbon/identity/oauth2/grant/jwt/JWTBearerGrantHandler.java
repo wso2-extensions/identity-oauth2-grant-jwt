@@ -66,6 +66,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static final String OAUTH_SPLIT_AUTHZ_USER_3_WAY = "OAuth.SplitAuthzUser3Way";
     private static final String DEFAULT_IDP_NAME = "default";
     private static Log log = LogFactory.getLog(JWTBearerGrantHandler.class);
+    private static final String OPENID_IDP_ENTITY_ID = "IdPEntityId";
 
     private static String tenantDomain;
     private static int validityPeriod;
@@ -101,6 +102,15 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             } catch (IOException e) {
                 log.error("Error while closing the stream");
             }
+        }
+    }
+
+    private IdentityProvider getResidentIdp(String tenantDomain) throws IdentityOAuth2Exception {
+        try {
+            return IdentityProviderManager.getInstance().getResidentIdP(tenantDomain);
+        } catch (IdentityProviderManagementException e) {
+            String errorMsg = String.format("", tenantDomain);
+            throw new IdentityOAuth2Exception(errorMsg, e);
         }
     }
 
@@ -160,7 +170,22 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             handleException("Mandatory fields(Issuer, Subject, Expiration time or Audience) are empty in the given JSON Web Token.");
         }
         try {
-            identityProvider = IdentityProviderManager.getInstance().getIdPByName(jwtIssuer, tenantDomain);
+            String issuer = StringUtils.EMPTY;
+            IdentityProvider residentIdentityProvider = getResidentIdp(tenantDomain);
+            FederatedAuthenticatorConfig[] fedAuthnConfigs = residentIdentityProvider.getFederatedAuthenticatorConfigs();
+            FederatedAuthenticatorConfig oauthAuthenticatorConfig =
+                    IdentityApplicationManagementUtil.getFederatedAuthenticator(fedAuthnConfigs,
+                            IdentityApplicationConstants.Authenticator.OIDC.NAME);
+            if (oauthAuthenticatorConfig != null) {
+                issuer = IdentityApplicationManagementUtil.getProperty(oauthAuthenticatorConfig.getProperties(),
+                        OPENID_IDP_ENTITY_ID).getValue();
+            }
+            if (jwtIssuer.equals(issuer)) {
+                //if id token is used as the assertion
+                identityProvider = IdentityProviderManager.getInstance().getResidentIdP(tenantDomain);
+            } else {
+                identityProvider = IdentityProviderManager.getInstance().getIdPByName(jwtIssuer, tenantDomain);
+            }
             if (identityProvider != null) {
                 // if no IDPs were found for a given name, the IdentityProviderManager returns a dummy IDP with the
                 // name "default". We need to handle this case.
