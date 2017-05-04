@@ -67,6 +67,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static final String DEFAULT_IDP_NAME = "default";
     private static Log log = LogFactory.getLog(JWTBearerGrantHandler.class);
     private static final String OPENID_IDP_ENTITY_ID = "IdPEntityId";
+    private static final String ERROR_GET_RESIDENT_IDP =
+            "Error while getting Resident Identity Provider of '%s' tenant.";
 
     private static String tenantDomain;
     private static int validityPeriod;
@@ -109,7 +111,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         try {
             return IdentityProviderManager.getInstance().getResidentIdP(tenantDomain);
         } catch (IdentityProviderManagementException e) {
-            String errorMsg = String.format("", tenantDomain);
+            String errorMsg = String.format(ERROR_GET_RESIDENT_IDP, tenantDomain);
             throw new IdentityOAuth2Exception(errorMsg, e);
         }
     }
