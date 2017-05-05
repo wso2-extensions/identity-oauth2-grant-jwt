@@ -66,6 +66,9 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static final String OAUTH_SPLIT_AUTHZ_USER_3_WAY = "OAuth.SplitAuthzUser3Way";
     private static final String DEFAULT_IDP_NAME = "default";
     private static Log log = LogFactory.getLog(JWTBearerGrantHandler.class);
+    private static final String OIDC_IDP_ENTITY_ID = "IdPEntityId";
+    private static final String ERROR_GET_RESIDENT_IDP =
+            "Error while getting Resident Identity Provider of '%s' tenant.";
 
     private static String tenantDomain;
     private static int validityPeriod;
@@ -102,6 +105,34 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 log.error("Error while closing the stream");
             }
         }
+    }
+
+    /**
+     * Get resident Identity Provider.
+     *
+     * @param tenantDomain tenant Domain
+     * @param jwtIssuer    issuer extracted from assertion
+     * @return resident Identity Provider
+     * @throws IdentityOAuth2Exception
+     */
+    private IdentityProvider getResidentityIDPForIssuer(String tenantDomain, String jwtIssuer) throws IdentityOAuth2Exception {
+        String issuer = StringUtils.EMPTY;
+        IdentityProvider residentIdentityProvider = null;
+        try {
+            residentIdentityProvider = IdentityProviderManager.getInstance().getResidentIdP(tenantDomain);
+        } catch (IdentityProviderManagementException e) {
+            String errorMsg = String.format(ERROR_GET_RESIDENT_IDP, tenantDomain);
+            throw new IdentityOAuth2Exception(errorMsg, e);
+        }
+        FederatedAuthenticatorConfig[] fedAuthnConfigs = residentIdentityProvider.getFederatedAuthenticatorConfigs();
+        FederatedAuthenticatorConfig oauthAuthenticatorConfig =
+                IdentityApplicationManagementUtil.getFederatedAuthenticator(fedAuthnConfigs,
+                        IdentityApplicationConstants.Authenticator.OIDC.NAME);
+        if (oauthAuthenticatorConfig != null) {
+            issuer = IdentityApplicationManagementUtil.getProperty(oauthAuthenticatorConfig.getProperties(),
+                    OIDC_IDP_ENTITY_ID).getValue();
+        }
+        return jwtIssuer.equals(issuer) ? residentIdentityProvider : null;
     }
 
 
@@ -165,8 +196,11 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 // if no IDPs were found for a given name, the IdentityProviderManager returns a dummy IDP with the
                 // name "default". We need to handle this case.
                 if (StringUtils.equalsIgnoreCase(identityProvider.getIdentityProviderName(), DEFAULT_IDP_NAME)) {
-                    log.error("Default IDP Found. This means a valid IDP was not found for issuer: " + jwtIssuer);
-                    handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
+                    //check whether this jwt was issued by the resident identity provider
+                    identityProvider = getResidentityIDPForIssuer(tenantDomain, jwtIssuer);
+                    if (identityProvider == null) {
+                        handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
+                    }
                 }
 
                 tokenEndPointAlias = getTokenEndpointAlias(identityProvider);
