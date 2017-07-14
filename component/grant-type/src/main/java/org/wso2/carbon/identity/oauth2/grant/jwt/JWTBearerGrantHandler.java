@@ -70,8 +70,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static final String ERROR_GET_RESIDENT_IDP =
             "Error while getting Resident Identity Provider of '%s' tenant.";
 
-    private static String tenantDomain;
-    private static int validityPeriod;
+    private String tenantDomain;
+    private int validityPeriod;
     private JWTCache jwtCache;
     private boolean cacheUsedJTI;
 
@@ -483,7 +483,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      */
     private boolean checkValidityOfTheToken(Date issuedAtTime, long currentTimeInMillis, long timeStampSkewMillis) throws IdentityOAuth2Exception {
         long issuedAtTimeMillis = issuedAtTime.getTime();
-        long rejectBeforeMillis = validityPeriod * 60 * 1000;
+        long rejectBeforeMillis = 1000L * 60 * validityPeriod;
         if (currentTimeInMillis + timeStampSkewMillis - issuedAtTimeMillis >
                 rejectBeforeMillis) {
             handleException("JSON Web Token is issued before the allowed time." +
@@ -570,11 +570,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             }
             if (alg.indexOf("RS") == 0) {
                 RSAPublicKey publicKey = null;
-                if (x509Certificate != null) {
-                    publicKey = (RSAPublicKey) x509Certificate.getPublicKey();
-                } else {
-                    handleException("Unable to get certificate");
-                }
+                // At this point 'x509Certificate' will never be null.
+                publicKey = (RSAPublicKey) x509Certificate.getPublicKey();
                 if (publicKey != null) {
                     verifier = new RSASSAVerifier(publicKey);
                 } else {
@@ -589,7 +586,9 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 handleException("Could not create a signature verifier for algorithm type: " + alg);
             }
         }
-        return verifier != null && signedJWT.verify(verifier);
+
+        // At this point 'verifier' will never be null;
+        return signedJWT.verify(verifier);
     }
 
     /**
