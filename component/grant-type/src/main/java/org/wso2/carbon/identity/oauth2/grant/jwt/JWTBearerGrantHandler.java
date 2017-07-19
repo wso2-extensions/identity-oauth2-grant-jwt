@@ -48,6 +48,7 @@ import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.PublicKey;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
@@ -569,13 +570,12 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 log.debug("Signature Algorithm found in the JWT Header: " + alg);
             }
             if (alg.indexOf("RS") == 0) {
-                RSAPublicKey publicKey = null;
                 // At this point 'x509Certificate' will never be null.
-                publicKey = (RSAPublicKey) x509Certificate.getPublicKey();
-                if (publicKey != null) {
-                    verifier = new RSASSAVerifier(publicKey);
+                PublicKey publicKey = x509Certificate.getPublicKey();
+                if (publicKey instanceof RSAPublicKey) {
+                    verifier = new RSASSAVerifier((RSAPublicKey) publicKey);
                 } else {
-                    handleException("Public key is null");
+                    handleException("Public key is not an RSA public key.");
                 }
             } else {
                 if (log.isDebugEnabled()) {
