@@ -48,6 +48,7 @@ import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.PublicKey;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
@@ -70,8 +71,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static final String ERROR_GET_RESIDENT_IDP =
             "Error while getting Resident Identity Provider of '%s' tenant.";
 
-    private static String tenantDomain;
-    private static int validityPeriod;
+    private String tenantDomain;
+    private int validityPeriod;
     private JWTCache jwtCache;
     private boolean cacheUsedJTI;
 
@@ -483,7 +484,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      */
     private boolean checkValidityOfTheToken(Date issuedAtTime, long currentTimeInMillis, long timeStampSkewMillis) throws IdentityOAuth2Exception {
         long issuedAtTimeMillis = issuedAtTime.getTime();
-        long rejectBeforeMillis = validityPeriod * 60 * 1000;
+        long rejectBeforeMillis = 1000L * 60 * validityPeriod;
         if (currentTimeInMillis + timeStampSkewMillis - issuedAtTimeMillis >
                 rejectBeforeMillis) {
             handleException("JSON Web Token is issued before the allowed time." +
@@ -569,16 +570,12 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 log.debug("Signature Algorithm found in the JWT Header: " + alg);
             }
             if (alg.indexOf("RS") == 0) {
-                RSAPublicKey publicKey = null;
-                if (x509Certificate != null) {
-                    publicKey = (RSAPublicKey) x509Certificate.getPublicKey();
+                // At this point 'x509Certificate' will never be null.
+                PublicKey publicKey = x509Certificate.getPublicKey();
+                if (publicKey instanceof RSAPublicKey) {
+                    verifier = new RSASSAVerifier((RSAPublicKey) publicKey);
                 } else {
-                    handleException("Unable to get certificate");
-                }
-                if (publicKey != null) {
-                    verifier = new RSASSAVerifier(publicKey);
-                } else {
-                    handleException("Public key is null");
+                    handleException("Public key is not an RSA public key.");
                 }
             } else {
                 if (log.isDebugEnabled()) {
@@ -589,7 +586,9 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 handleException("Could not create a signature verifier for algorithm type: " + alg);
             }
         }
-        return verifier != null && signedJWT.verify(verifier);
+
+        // At this point 'verifier' will never be null;
+        return signedJWT.verify(verifier);
     }
 
     /**
