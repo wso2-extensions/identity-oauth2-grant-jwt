@@ -521,12 +521,12 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 this.jwtCache.addToCache(jti, new JWTCacheEntry(signedJWT));
                 if (log.isDebugEnabled()) {
                     log.debug("jti of the JWT has been validated successfully and cache updated");
-                } else {
+                }
+            } else {
                     handleException("JWT Token \n" + signedJWT.getHeader().toJSONObject().toString() + "\n"
                             + signedJWT.getPayload().toJSONObject().toString() + "\n" +
                             "Has been replayed before the allowed expiry time : "
                             + cachedJWT.getJWTClaimsSet().getExpirationTime());
-                }
             }
         } catch (ParseException e) {
             handleException("Unable to parse the cached jwt assertion : " + entry.getEncodedJWt());
