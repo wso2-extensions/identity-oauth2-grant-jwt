@@ -55,7 +55,7 @@
                     <instructions>
                         <Bundle-SymbolicName>${project.artifactId}</Bundle-SymbolicName>
                         <Bundle-Name>${project.artifactId}</Bundle-Name>
-                        <Private-Package>org.wso2.carbon.identity.oauth2.grant.jwt</Private-Package>
+                        <Private-Package>org.wso2.carbon.identity.oauth2.grant.jwt.internal</Private-Package>
                         <Import-Package>
                             org.osgi.service.*,
                             org.osgi.framework.*,
