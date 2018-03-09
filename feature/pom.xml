@@ -49,7 +49,7 @@
                             <goal>p2-feature-gen</goal>
                         </goals>
                         <configuration>
-                            <id>org.wso2.carbon.identity.oauth2.grant.jwt</id>
+                            <id>org.wso2.carbon.extension.identity.oauth2.jwt</id>
                             <propertiesFile>feature.properties</propertiesFile>
                             <adviceFile>
                                 <properties>
