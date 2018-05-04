@@ -184,7 +184,7 @@
         <dependency>
             <groupId>org.wso2.carbon.identity</groupId>
             <artifactId>org.wso2.carbon.identity.oauth</artifactId>
-            <version>${carbon.identity.oauth.version}</version>
+            <version>${carbon.identity.version}</version>
         </dependency>
         <dependency>
             <groupId>org.wso2.securevault</groupId>
@@ -379,7 +379,6 @@
     </distributionManagement>
     <properties>
         <carbon.identity.version>5.0.7</carbon.identity.version>
-        <carbon.identity.oauth.version>5.1.1</carbon.identity.oauth.version>
         <commons-logging.version>4.4.3</commons-logging.version>
         <carbon.kernel.version>4.4.3</carbon.kernel.version>
         <org.apache.oltu.oauth2.client.version>1.0.0</org.apache.oltu.oauth2.client.version>
