@@ -24,5 +24,7 @@ public class JWTConstants {
     public static final String VALIDITY_PERIOD = "validityPeriod";
     public static final String CACHE_USED_JTI = "cacheUsed";
     public static final String PROPERTIES_FILE = "jwt.properties";
+    public static final String JWKS_URI = "jwksUri";
+    public static final String JWKS_VALIDATION_ENABLE_CONFIG = "JWTValidatorConfigs.Enable";
 
 }
