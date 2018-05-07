@@ -19,17 +19,19 @@
 package org.wso2.carbon.identity.oauth2.grant.jwt;
 
 import com.nimbusds.jose.JOSEException;
+import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.JWSVerifier;
-import com.nimbusds.jose.ReadOnlyJWSHeader;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
-import com.nimbusds.jwt.ReadOnlyJWTClaimsSet;
+import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.common.model.FederatedAuthenticatorConfig;
 import org.wso2.carbon.identity.application.common.model.IdentityProvider;
+import org.wso2.carbon.identity.application.common.model.IdentityProviderProperty;
 import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationManagementUtil;
@@ -42,6 +44,7 @@ import org.wso2.carbon.identity.oauth2.model.RequestParameter;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import org.wso2.carbon.identity.oauth2.token.handlers.grant.AbstractAuthorizationGrantHandler;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
+import org.wso2.carbon.identity.oauth2.validators.jwt.JWKSBasedJWTValidator;
 import org.wso2.carbon.idp.mgt.IdentityProviderManagementException;
 import org.wso2.carbon.idp.mgt.IdentityProviderManager;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
@@ -160,7 +163,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         SignedJWT signedJWT;
         IdentityProvider identityProvider;
         String tokenEndPointAlias = null;
-        ReadOnlyJWTClaimsSet claimsSet;
+        JWTClaimsSet claimsSet;
 
         tenantDomain = tokReqMsgCtx.getOauth2AccessTokenReqDTO().getTenantDomain();
         if (StringUtils.isEmpty(tenantDomain)) {
@@ -182,7 +185,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         Date notBeforeTime = claimsSet.getNotBeforeTime();
         Date issuedAtTime = claimsSet.getIssueTime();
         String jti = claimsSet.getJWTID();
-        Map<String, Object> customClaims = claimsSet.getCustomClaims();
+        Map<String, Object> customClaims = claimsSet.getClaims();
         boolean signatureValid;
         boolean audienceFound = false;
         long currentTimeInMillis = System.currentTimeMillis();
@@ -305,7 +308,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     log.debug("No custom claims found. Continue validating other claims.");
                 }
             } else {
-                boolean customClaimsValidated = validateCustomClaims(claimsSet.getCustomClaims());
+                boolean customClaimsValidated = validateCustomClaims(claimsSet.getClaims());
                 if (!customClaimsValidated) {
                     handleException("Custom Claims in the JWT were invalid");
                 }
@@ -338,7 +341,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @param claimsSet all the JWT claims
      * @return The subject, to be used
      */
-    protected String resolveSubject(ReadOnlyJWTClaimsSet claimsSet) {
+    protected String resolveSubject(JWTClaimsSet claimsSet) {
         return claimsSet.getSubject();
     }
 
@@ -375,8 +378,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @param signedJWT Signed JWT
      * @return Claim set
      */
-    private ReadOnlyJWTClaimsSet getClaimSet(SignedJWT signedJWT) throws IdentityOAuth2Exception {
-        ReadOnlyJWTClaimsSet claimsSet = null;
+    private JWTClaimsSet getClaimSet(SignedJWT signedJWT) throws IdentityOAuth2Exception {
+        JWTClaimsSet claimsSet = null;
         try {
             claimsSet = signedJWT.getJWTClaimsSet();
         } catch (ParseException e) {
@@ -555,40 +558,80 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private boolean validateSignature(SignedJWT signedJWT, IdentityProvider idp)
             throws JOSEException, IdentityOAuth2Exception {
 
-        JWSVerifier verifier = null;
-        ReadOnlyJWSHeader header = signedJWT.getHeader();
-        X509Certificate x509Certificate = resolveSignerCertificate(header, idp);
-        if (x509Certificate == null) {
-            handleException("Unable to locate certificate for Identity Provider " + idp.getDisplayName() + "; JWT " + header.toString());
+        boolean isJWKSEnabled = false;
+        boolean hasJWKSUri = false;
+        String jwksUri = null;
+
+        String isJWKSEnalbedProperty = IdentityUtil.getProperty(JWTConstants.JWKS_VALIDATION_ENABLE_CONFIG);
+        isJWKSEnabled = Boolean.parseBoolean(isJWKSEnalbedProperty);
+        if (isJWKSEnabled) {
+            if (log.isDebugEnabled()) {
+                log.debug("JWKS based JWT validation enabled.");
+            }
         }
 
-        String alg = signedJWT.getHeader().getAlgorithm().getName();
-        if (StringUtils.isEmpty(alg)) {
-            handleException("Algorithm must not be null.");
-        } else {
-            if (log.isDebugEnabled()) {
-                log.debug("Signature Algorithm found in the JWT Header: " + alg);
-            }
-            if (alg.indexOf("RS") == 0) {
-                // At this point 'x509Certificate' will never be null.
-                PublicKey publicKey = x509Certificate.getPublicKey();
-                if (publicKey instanceof RSAPublicKey) {
-                    verifier = new RSASSAVerifier((RSAPublicKey) publicKey);
+        IdentityProviderProperty[] identityProviderProperties = idp.getIdpProperties();
+        if (!ArrayUtils.isEmpty(identityProviderProperties)) {
+            for (IdentityProviderProperty identityProviderProperty : identityProviderProperties) {
+                if (StringUtils.equals(identityProviderProperty.getName(), JWTConstants.JWKS_URI)) {
+                    hasJWKSUri = true;
+                    jwksUri = identityProviderProperty.getValue();
+                    if (log.isDebugEnabled()) {
+                        log.debug("JWKS endpoint set for the identity provider : " + idp.getIdentityProviderName() +
+                                ", jwks_uri : " + jwksUri);
+                    }
+                    break;
                 } else {
-                    handleException("Public key is not an RSA public key.");
+                    if (log.isDebugEnabled()) {
+                        log.debug("JWKS endpoint not specified for the identity provider : " + idp
+                                .getIdentityProviderName());
+                    }
                 }
+            }
+        }
+
+        if (isJWKSEnabled && hasJWKSUri) {
+            JWKSBasedJWTValidator jwksBasedJWTValidator = new JWKSBasedJWTValidator();
+            return jwksBasedJWTValidator.validateSignature(signedJWT.getParsedString(), jwksUri, signedJWT.getHeader
+                    ().getAlgorithm().getName(), null);
+        } else {
+            JWSVerifier verifier = null;
+            JWSHeader header = signedJWT.getHeader();
+            X509Certificate x509Certificate = resolveSignerCertificate(header, idp);
+            if (x509Certificate == null) {
+                handleException(
+                        "Unable to locate certificate for Identity Provider " + idp.getDisplayName() + "; JWT " +
+                                header.toString());
+            }
+
+            String alg = signedJWT.getHeader().getAlgorithm().getName();
+            if (StringUtils.isEmpty(alg)) {
+                handleException("Algorithm must not be null.");
             } else {
                 if (log.isDebugEnabled()) {
-                    log.debug("Signature Algorithm not supported yet : " + alg);
+                    log.debug("Signature Algorithm found in the JWT Header: " + alg);
+                }
+                if (alg.startsWith("RS")) {
+                    // At this point 'x509Certificate' will never be null.
+                    PublicKey publicKey = x509Certificate.getPublicKey();
+                    if (publicKey instanceof RSAPublicKey) {
+                        verifier = new RSASSAVerifier((RSAPublicKey) publicKey);
+                    } else {
+                        handleException("Public key is not an RSA public key.");
+                    }
+                } else {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Signature Algorithm not supported yet : " + alg);
+                    }
+                }
+                if (verifier == null) {
+                    handleException("Could not create a signature verifier for algorithm type: " + alg);
                 }
             }
-            if (verifier == null) {
-                handleException("Could not create a signature verifier for algorithm type: " + alg);
-            }
-        }
 
-        // At this point 'verifier' will never be null;
-        return signedJWT.verify(verifier);
+            // At this point 'verifier' will never be null;
+            return signedJWT.verify(verifier);
+        }
     }
 
     /**
@@ -601,7 +644,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @return the resolved X509 Certificate, to be used to validate the JWT signature.
      * @throws IdentityOAuth2Exception something goes wrong.
      */
-    protected X509Certificate resolveSignerCertificate(ReadOnlyJWSHeader header,
+    protected X509Certificate resolveSignerCertificate(JWSHeader header,
                                                        IdentityProvider idp) throws IdentityOAuth2Exception {
         X509Certificate x509Certificate = null;
         try {
