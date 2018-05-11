@@ -62,8 +62,9 @@
                             org.apache.oltu.oauth2.common.validators; version="${oltu.package.import.version.range}",
                             org.apache.oltu.oauth2.common; version="${oltu.package.import.version.range}",
                             org.wso2.carbon.identity.oauth2.*;
-                            version="${carbon.identity.package.import.version.range}",
-                            org.wso2.carbon.identity.oauth.*; version="${carbon.identity.package.import.version.range}",
+                            version="${carbon.identity.oauth.package.import.version.range}",
+                            org.wso2.carbon.identity.oauth.*;
+                            version="${carbon.identity.oauth.package.import.version.range}",
                             org.wso2.carbon.identity.base; version="${carbon.identity.package.import.version.range}",
                             org.wso2.carbon.identity.core.util;
                             version="${carbon.identity.package.import.version.range}",
