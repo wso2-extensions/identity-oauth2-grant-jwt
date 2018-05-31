@@ -59,6 +59,7 @@
                         <Import-Package>
                             org.osgi.service.*,
                             org.osgi.framework.*,
+                            org.wso2.carbon.core.*; version ="${carbon.kernel.version}",
                             org.apache.oltu.oauth2.common.validators; version="${oltu.package.import.version.range}",
                             org.apache.oltu.oauth2.common; version="${oltu.package.import.version.range}",
                             org.wso2.carbon.identity.oauth2.*;
