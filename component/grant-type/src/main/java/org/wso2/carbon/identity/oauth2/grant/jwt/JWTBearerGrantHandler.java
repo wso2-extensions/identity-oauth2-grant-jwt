@@ -24,25 +24,32 @@ import com.nimbusds.jose.JWSVerifier;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
+import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
+import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
+import org.wso2.carbon.identity.application.common.model.ClaimMapping;
 import org.wso2.carbon.identity.application.common.model.FederatedAuthenticatorConfig;
 import org.wso2.carbon.identity.application.common.model.IdentityProvider;
 import org.wso2.carbon.identity.application.common.model.IdentityProviderProperty;
 import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationManagementUtil;
+import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
+import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenRespDTO;
 import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCache;
 import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCacheEntry;
 import org.wso2.carbon.identity.oauth2.model.RequestParameter;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import org.wso2.carbon.identity.oauth2.token.handlers.grant.AbstractAuthorizationGrantHandler;
+import org.wso2.carbon.identity.oauth2.util.ClaimsUtil;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.identity.oauth2.validators.jwt.JWKSBasedJWTValidator;
 import org.wso2.carbon.idp.mgt.IdentityProviderManagementException;
@@ -57,10 +64,10 @@ import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPublicKey;
 import java.text.ParseException;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-
 
 /**
  * Class to handle JSON Web Token(JWT) grant type
@@ -161,7 +168,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 //        super.validateGrant(tokReqMsgCtx); //This line was commented to work with IS 5.2.0
 
         SignedJWT signedJWT;
-        IdentityProvider identityProvider;
+        IdentityProvider identityProvider = null;
         String tokenEndPointAlias = null;
         JWTClaimsSet claimsSet;
 
@@ -182,6 +189,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         String subject = resolveSubject(claimsSet);
         List<String> audience = claimsSet.getAudience();
         Date expirationTime = claimsSet.getExpirationTime();
+
+        tokReqMsgCtx.addProperty(JWTConstants.EXPIRY_TIME, expirationTime);
         Date notBeforeTime = claimsSet.getNotBeforeTime();
         Date issuedAtTime = claimsSet.getIssueTime();
         String jti = claimsSet.getJWTID();
@@ -220,13 +229,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             } else {
                 handleException("Signature or Message Authentication invalid.");
             }
+            setAuthorizedUser(tokReqMsgCtx, identityProvider, subject);
 
-            if (Boolean.parseBoolean(IdentityUtil.getProperty(OAUTH_SPLIT_AUTHZ_USER_3_WAY))) {
-                tokReqMsgCtx.setAuthorizedUser(OAuth2Util.getUserFromUserName(subject));
-            } else {
-                tokReqMsgCtx.setAuthorizedUser(AuthenticatedUser
-                        .createLocalAuthenticatedUserFromSubjectIdentifier(subject));
-            }
             if (log.isDebugEnabled()) {
                 log.debug("Subject(sub) found in JWT: " + subject);
                 log.debug(subject + " set as the Authorized User.");
@@ -330,7 +334,87 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         if (log.isDebugEnabled()) {
             log.debug("Issuer(iss) of the JWT validated successfully");
         }
+
+        if (OAuth2Util.isOIDCAuthzRequest(tokReqMsgCtx.getScope())) {
+            handleCustomClaims(tokReqMsgCtx, customClaims, identityProvider);
+        }
         return true;
+    }
+
+    /**
+     * To set the authorized user to message context.
+     *
+     * @param tokenReqMsgCtx                 Token request message context.
+     * @param identityProvider               Identity Provider
+     * @param authenticatedSubjectIdentifier Authenticated Subject Identifier.
+     */
+    protected void setAuthorizedUser(OAuthTokenReqMessageContext tokenReqMsgCtx, IdentityProvider identityProvider,
+            String authenticatedSubjectIdentifier) {
+
+        AuthenticatedUser authenticatedUser;
+        if (Boolean.parseBoolean(IdentityUtil.getProperty(OAUTH_SPLIT_AUTHZ_USER_3_WAY))) {
+            authenticatedUser = OAuth2Util.getUserFromUserName(authenticatedSubjectIdentifier);
+            authenticatedUser.setAuthenticatedSubjectIdentifier(authenticatedSubjectIdentifier);
+        } else {
+            authenticatedUser = AuthenticatedUser
+                    .createLocalAuthenticatedUserFromSubjectIdentifier(authenticatedSubjectIdentifier);
+        }
+        authenticatedUser.setFederatedUser(true);
+        tokenReqMsgCtx.setAuthorizedUser(authenticatedUser);
+    }
+    /**
+     * Handle the custom claims and add it to the relevant authorized user, in the validation phase, so that when
+     * issuing the access token we could use the same attributes later.
+     *
+     * @param tokReqMsgCtx     OauthTokenReqMessageContext
+     * @param customClaims     Custom Claims
+     * @param identityProvider Identity Provider
+     * @throws IdentityOAuth2Exception Identity Oauth2 Exception
+     */
+    protected void handleCustomClaims(OAuthTokenReqMessageContext tokReqMsgCtx, Map<String, Object> customClaims,
+            IdentityProvider identityProvider) throws IdentityOAuth2Exception {
+
+        Map<String, String> customClaimMap = getCustomClaims(customClaims);
+        Map<String, String> mappedClaims;
+        try {
+            mappedClaims = ClaimsUtil.handleClaimMapping(identityProvider, customClaimMap, tenantDomain, tokReqMsgCtx);
+        } catch (IdentityApplicationManagementException | IdentityException e) {
+            throw new IdentityOAuth2Exception(
+                    "Error while handling custom claim mapping for the tenant domain, " + tenantDomain, e);
+        }
+        AuthenticatedUser user = tokReqMsgCtx.getAuthorizedUser();
+        if (MapUtils.isNotEmpty(mappedClaims)) {
+            user.setUserAttributes(FrameworkUtils.buildClaimMappings(mappedClaims));
+        }
+        tokReqMsgCtx.setAuthorizedUser(user);
+    }
+
+    @Override
+    public OAuth2AccessTokenRespDTO issue(OAuthTokenReqMessageContext tokReqMsgCtx) throws IdentityOAuth2Exception {
+
+        OAuth2AccessTokenRespDTO tokenRespDTO = super.issue(tokReqMsgCtx);
+        AuthenticatedUser user = tokReqMsgCtx.getAuthorizedUser();
+        Map<ClaimMapping, String>  userAttributes = user.getUserAttributes();
+        if (MapUtils.isNotEmpty(userAttributes)) {
+            ClaimsUtil.addUserAttributesToCache(tokenRespDTO, tokReqMsgCtx, userAttributes);
+        }
+        return tokenRespDTO;
+    }
+
+    /**
+     * To get the custom claims map using the custom claims of JWT
+     *
+     * @param customClaims Relevant custom claims
+     * @return custom claims.
+     */
+    protected Map<String, String> getCustomClaims(Map<String, Object> customClaims) {
+
+        Map<String, String> customClaimMap = new HashMap<>();
+        for (Map.Entry<String, Object> entry : customClaims.entrySet()) {
+            Object value = entry.getValue();
+            customClaimMap.put(entry.getKey(), value.toString());
+        }
+        return customClaimMap;
     }
 
     /**

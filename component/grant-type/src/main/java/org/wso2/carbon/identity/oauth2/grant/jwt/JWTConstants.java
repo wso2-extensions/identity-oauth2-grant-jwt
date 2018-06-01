@@ -26,5 +26,6 @@ public class JWTConstants {
     public static final String PROPERTIES_FILE = "jwt.properties";
     public static final String JWKS_URI = "jwksUri";
     public static final String JWKS_VALIDATION_ENABLE_CONFIG = "JWTValidatorConfigs.Enable";
-
+    // Expiry time of the jwt token
+    public static final String EXPIRY_TIME = "EXPIRY_TIME_JWT";
 }
