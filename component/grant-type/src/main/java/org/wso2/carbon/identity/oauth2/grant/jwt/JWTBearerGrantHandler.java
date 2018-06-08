@@ -35,6 +35,7 @@ import org.wso2.carbon.core.util.KeyStoreManager;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
+import org.wso2.carbon.identity.application.common.model.ClaimMapping;
 import org.wso2.carbon.identity.application.common.model.FederatedAuthenticatorConfig;
 import org.wso2.carbon.identity.application.common.model.IdentityProvider;
 import org.wso2.carbon.identity.application.common.model.IdentityProviderProperty;
@@ -46,6 +47,7 @@ import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
+import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenRespDTO;
 import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCache;
 import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCacheEntry;
 import org.wso2.carbon.identity.oauth2.model.RequestParameter;
@@ -449,6 +451,19 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             user.setUserAttributes(FrameworkUtils.buildClaimMappings(mappedClaims));
         }
         tokReqMsgCtx.setAuthorizedUser(user);
+    }
+
+    @Override
+    public OAuth2AccessTokenRespDTO issue(OAuthTokenReqMessageContext tokReqMsgCtx)
+            throws IdentityOAuth2Exception {
+
+        OAuth2AccessTokenRespDTO tokenRespDTO = super.issue(tokReqMsgCtx);
+        AuthenticatedUser user = tokReqMsgCtx.getAuthorizedUser();
+        Map<ClaimMapping, String> userAttributes = user.getUserAttributes();
+        if (MapUtils.isNotEmpty(userAttributes)) {
+            ClaimsUtil.addUserAttributesToCache(tokenRespDTO, tokReqMsgCtx, userAttributes);
+        }
+        return tokenRespDTO;
     }
 
     /**
