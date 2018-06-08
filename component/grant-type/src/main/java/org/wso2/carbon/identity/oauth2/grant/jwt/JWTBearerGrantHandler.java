@@ -21,7 +21,9 @@ package org.wso2.carbon.identity.oauth2.grant.jwt;
 import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.JWSVerifier;
+import com.nimbusds.jose.crypto.RSADecrypter;
 import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jwt.EncryptedJWT;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import org.apache.commons.collections.MapUtils;
@@ -29,6 +31,7 @@ import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.wso2.carbon.core.util.KeyStoreManager;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
@@ -40,7 +43,11 @@ import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationManagementUtil;
 import org.wso2.carbon.identity.base.IdentityException;
+import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
+import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCache;
+import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCacheEntry;
+import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCacheKey;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenRespDTO;
@@ -58,9 +65,11 @@ import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.security.Key;
 import java.security.PublicKey;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.text.ParseException;
 import java.util.Date;
@@ -68,6 +77,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Class to handle JSON Web Token(JWT) grant type
@@ -80,6 +90,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static final String OIDC_IDP_ENTITY_ID = "IdPEntityId";
     private static final String ERROR_GET_RESIDENT_IDP =
             "Error while getting Resident Identity Provider of '%s' tenant.";
+    private static Map<Integer, Key> privateKeys = new ConcurrentHashMap<>();
+    private static final String JWT_ASSERTION_CLAIM = "JWT_ASSERTION_CLAIM";
 
     private String tenantDomain;
     private int validityPeriod;
@@ -92,6 +104,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @throws org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception
      */
     public void init() throws IdentityOAuth2Exception {
+
         super.init();
         String resourceName = JWTConstants.PROPERTIES_FILE;
 
@@ -127,6 +140,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @throws IdentityOAuth2Exception
      */
     private IdentityProvider getResidentityIDPForIssuer(String tenantDomain, String jwtIssuer) throws IdentityOAuth2Exception {
+
         String issuer = StringUtils.EMPTY;
         IdentityProvider residentIdentityProvider = null;
         try {
@@ -145,7 +159,6 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         }
         return jwtIssuer.equals(issuer) ? residentIdentityProvider : null;
     }
-
 
     /**
      * We're validating the JWT token that we receive from the request. Through the assertion parameter is the POST
@@ -167,20 +180,74 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     public boolean validateGrant(OAuthTokenReqMessageContext tokReqMsgCtx) throws IdentityOAuth2Exception {
 //        super.validateGrant(tokReqMsgCtx); //This line was commented to work with IS 5.2.0
 
-        SignedJWT signedJWT;
+        SignedJWT signedJWT = null;
         IdentityProvider identityProvider = null;
         String tokenEndPointAlias = null;
-        JWTClaimsSet claimsSet;
+        JWTClaimsSet claimsSet = null;
 
         tenantDomain = tokReqMsgCtx.getOauth2AccessTokenReqDTO().getTenantDomain();
         if (StringUtils.isEmpty(tenantDomain)) {
             tenantDomain = MultitenantConstants.SUPER_TENANT_DOMAIN_NAME;
         }
-        signedJWT = getSignedJWT(tokReqMsgCtx);
-        if (signedJWT == null) {
-            handleException("No Valid Assertion was found for " + JWTConstants.OAUTH_JWT_BEARER_GRANT_TYPE);
+        //Check whether the assertion is encrypted.
+        EncryptedJWT encryptedJWT = getEncryptedJWT(tokReqMsgCtx);
+        if (encryptedJWT == null) {
+            if (log.isDebugEnabled()) {
+                log.debug("The assertion is not encrypted.");
+            }
+            //The assertion is not an encrypted one.
+            signedJWT = getSignedJWT(tokReqMsgCtx);
+            if (signedJWT == null) {
+                handleException("No Valid Assertion was found for " + JWTConstants.OAUTH_JWT_BEARER_GRANT_TYPE);
+            } else {
+                claimsSet = getClaimSet(signedJWT);
+            }
+        } else {
+            // The assertion is encrypted.
+            RSAPrivateKey rsaPrivateKey = getPrivateKey(tenantDomain);
+            RSADecrypter decrypter = new RSADecrypter(rsaPrivateKey);
+            try {
+                encryptedJWT.decrypt(decrypter);
+                if (log.isDebugEnabled()) {
+                    log.debug("The assertion is successfully decrypted.");
+                }
+            } catch (JOSEException e) {
+                String errorMessage = "Error when decrypting the encrypted JWT." + e.getMessage();
+                throw new IdentityOAuth2Exception(errorMessage, e);
+            }
+            try {
+                // If the assertion is a nested JWT.
+                String payload = null;
+                if (encryptedJWT.getPayload() != null) {
+                    payload = encryptedJWT.getPayload().toString();
+                }
+                if (!isEncryptedJWTSigned(payload)) {
+                    try {
+                        // If encrypted JWT is not signed.
+                        claimsSet = encryptedJWT.getJWTClaimsSet();
+                        if (log.isDebugEnabled()) {
+                            log.debug("The encrypted JWT is not signed. Obtained the claim set of the encrypted JWT.");
+                        }
+                    } catch (ParseException ex) {
+                        String errorMessage = "Error when trying to retrieve claimsSet from the encrypted JWT." +
+                                ex.getMessage();
+                        throw new IdentityOAuth2Exception(errorMessage, ex);
+                    }
+                } else {
+                    // If encrypted JWT is not signed.
+                    signedJWT = SignedJWT.parse(payload);
+                    claimsSet = getClaimSet(signedJWT);
+                    if (log.isDebugEnabled()) {
+                        log.debug("The encrypted JWT is signed. Obtained the claim set of the encrypted JWT.");
+                    }
+                }
+            } catch (ParseException e) {
+                String errorMessage = "Unexpected number of Base64URL parts of the nested JWT payload. Expected number" +
+                        " of parts must be three. ";
+                throw new IdentityOAuth2Exception(errorMessage, e);
+            }
         }
-        claimsSet = getClaimSet(signedJWT);
+
         if (claimsSet == null) {
             handleException("Claim values are empty in the given JSON Web Token");
         }
@@ -220,14 +287,15 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             } else {
                 handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
             }
-
-            signatureValid = validateSignature(signedJWT, identityProvider);
-            if (signatureValid) {
-                if (log.isDebugEnabled()) {
-                    log.debug("Signature/MAC validated successfully.");
+            if (signedJWT != null) {
+                signatureValid = validateSignature(signedJWT, identityProvider);
+                if (signatureValid) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Signature/MAC validated successfully.");
+                    }
+                } else {
+                    handleException("Signature or Message Authentication invalid.");
                 }
-            } else {
-                handleException("Signature or Message Authentication invalid.");
             }
             setAuthorizedUser(tokReqMsgCtx, identityProvider, subject);
 
@@ -334,11 +402,71 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         if (log.isDebugEnabled()) {
             log.debug("Issuer(iss) of the JWT validated successfully");
         }
+        tokReqMsgCtx.addProperty(JWT_ASSERTION_CLAIM, customClaims);
 
         if (OAuth2Util.isOIDCAuthzRequest(tokReqMsgCtx.getScope())) {
             handleCustomClaims(tokReqMsgCtx, customClaims, identityProvider);
         }
         return true;
+    }
+
+    @Override
+    public OAuth2AccessTokenRespDTO issue(OAuthTokenReqMessageContext tokenReqMsgCtx) throws IdentityOAuth2Exception {
+
+        OAuth2AccessTokenRespDTO responseDTO = super.issue(tokenReqMsgCtx);
+        AuthenticatedUser user = tokenReqMsgCtx.getAuthorizedUser();
+        Map<ClaimMapping, String> userAttributes = user.getUserAttributes();
+        if (MapUtils.isNotEmpty(userAttributes)) {
+            ClaimsUtil.addUserAttributesToCache(responseDTO, tokenReqMsgCtx, userAttributes);
+        }
+        String[] scope = tokenReqMsgCtx.getScope();
+        if (OAuth2Util.isOIDCAuthzRequest(scope)) {
+            Map<String, Object> customClaims = (Map<String, Object>) tokenReqMsgCtx.getProperty(JWT_ASSERTION_CLAIM);
+
+            if (customClaims != null) {
+                // Not converting claims. Sending the claim uris in original format.
+                Map<ClaimMapping, String> claimMappings = buildClaimMappings(customClaims);
+                addUserAttributesToCache(responseDTO, claimMappings);
+            }
+        }
+
+        return responseDTO;
+    }
+
+    private static Map<ClaimMapping, String> buildClaimMappings(Map<String, Object> attributeValue) {
+
+        Map<ClaimMapping, String> claimMap = new HashMap<>();
+        for (Object entryObject : attributeValue.entrySet()) {
+            Map.Entry<String, Object> entry = (Map.Entry<String, Object>) entryObject;
+            if (entry.getValue() != null) {
+                String value = entry.getValue().toString();
+                claimMap.put(ClaimMapping.build((String) entry.getKey(), (String) entry.getKey(), (String) null, false),
+                        value);
+            }
+        }
+
+        return claimMap;
+    }
+
+    /**
+     * This method is used to add custom claims to the cache.
+     *
+     * @param tokenRespDTO   tokenResponseDTO
+     * @param userAttributes user attributes to be stored in the cache
+     */
+    protected static void addUserAttributesToCache(OAuth2AccessTokenRespDTO tokenRespDTO,
+                                                   Map<ClaimMapping, String> userAttributes) {
+
+        AuthorizationGrantCacheKey authorizationGrantCacheKey = new AuthorizationGrantCacheKey(
+                tokenRespDTO.getAccessToken());
+        AuthorizationGrantCacheEntry authorizationGrantCacheEntry = new AuthorizationGrantCacheEntry(userAttributes);
+
+        if (StringUtils.isNotBlank(tokenRespDTO.getTokenId())) {
+            authorizationGrantCacheEntry.setTokenId(tokenRespDTO.getTokenId());
+        }
+
+        AuthorizationGrantCache.getInstance()
+                .addToCacheByToken(authorizationGrantCacheKey, authorizationGrantCacheEntry);
     }
 
     /**
@@ -349,7 +477,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @param authenticatedSubjectIdentifier Authenticated Subject Identifier.
      */
     protected void setAuthorizedUser(OAuthTokenReqMessageContext tokenReqMsgCtx, IdentityProvider identityProvider,
-            String authenticatedSubjectIdentifier) {
+                                     String authenticatedSubjectIdentifier) {
 
         AuthenticatedUser authenticatedUser;
         if (Boolean.parseBoolean(IdentityUtil.getProperty(OAUTH_SPLIT_AUTHZ_USER_3_WAY))) {
@@ -362,6 +490,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         authenticatedUser.setFederatedUser(true);
         tokenReqMsgCtx.setAuthorizedUser(authenticatedUser);
     }
+
     /**
      * Handle the custom claims and add it to the relevant authorized user, in the validation phase, so that when
      * issuing the access token we could use the same attributes later.
@@ -372,7 +501,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @throws IdentityOAuth2Exception Identity Oauth2 Exception
      */
     protected void handleCustomClaims(OAuthTokenReqMessageContext tokReqMsgCtx, Map<String, Object> customClaims,
-            IdentityProvider identityProvider) throws IdentityOAuth2Exception {
+                                      IdentityProvider identityProvider) throws IdentityOAuth2Exception {
 
         Map<String, String> customClaimMap = getCustomClaims(customClaims);
         Map<String, String> mappedClaims;
@@ -387,18 +516,6 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             user.setUserAttributes(FrameworkUtils.buildClaimMappings(mappedClaims));
         }
         tokReqMsgCtx.setAuthorizedUser(user);
-    }
-
-    @Override
-    public OAuth2AccessTokenRespDTO issue(OAuthTokenReqMessageContext tokReqMsgCtx) throws IdentityOAuth2Exception {
-
-        OAuth2AccessTokenRespDTO tokenRespDTO = super.issue(tokReqMsgCtx);
-        AuthenticatedUser user = tokReqMsgCtx.getAuthorizedUser();
-        Map<ClaimMapping, String>  userAttributes = user.getUserAttributes();
-        if (MapUtils.isNotEmpty(userAttributes)) {
-            ClaimsUtil.addUserAttributesToCache(tokenRespDTO, tokReqMsgCtx, userAttributes);
-        }
-        return tokenRespDTO;
     }
 
     /**
@@ -426,6 +543,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @return The subject, to be used
      */
     protected String resolveSubject(JWTClaimsSet claimsSet) {
+
         return claimsSet.getSubject();
     }
 
@@ -434,9 +552,10 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @return signedJWT
      */
     private SignedJWT getSignedJWT(OAuthTokenReqMessageContext tokReqMsgCtx) throws IdentityOAuth2Exception {
+
         RequestParameter[] params = tokReqMsgCtx.getOauth2AccessTokenReqDTO().getRequestParameters();
         String assertion = null;
-        SignedJWT signedJWT = null;
+        SignedJWT signedJWT;
         for (RequestParameter param : params) {
             if (param.getKey().equals(JWTConstants.OAUTH_JWT_ASSERTION)) {
                 assertion = param.getValue()[0];
@@ -453,7 +572,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 logJWT(signedJWT);
             }
         } catch (ParseException e) {
-            handleException("Error while parsing the JWT" + e.getMessage());
+            String errorMessage = "Error while parsing the JWT.";
+            throw new IdentityOAuth2Exception(errorMessage, e);
         }
         return signedJWT;
     }
@@ -463,6 +583,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @return Claim set
      */
     private JWTClaimsSet getClaimSet(SignedJWT signedJWT) throws IdentityOAuth2Exception {
+
         JWTClaimsSet claimsSet = null;
         try {
             claimsSet = signedJWT.getJWTClaimsSet();
@@ -479,6 +600,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @return token endpoint alias
      */
     private String getTokenEndpointAlias(IdentityProvider identityProvider) {
+
         Property oauthTokenURL = null;
         String tokenEndPointAlias = null;
         if (IdentityApplicationConstants.RESIDENT_IDP_RESERVED_NAME.equals(
@@ -529,6 +651,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @return true or false
      */
     private boolean checkExpirationTime(Date expirationTime, long currentTimeInMillis, long timeStampSkewMillis) throws IdentityOAuth2Exception {
+
         long expirationTimeInMillis = expirationTime.getTime();
         if ((currentTimeInMillis + timeStampSkewMillis) > expirationTimeInMillis) {
             handleException("JSON Web Token is expired." +
@@ -549,6 +672,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @return true or false
      */
     private boolean checkNotBeforeTime(Date notBeforeTime, long currentTimeInMillis, long timeStampSkewMillis) throws IdentityOAuth2Exception {
+
         long notBeforeTimeMillis = notBeforeTime.getTime();
         if (currentTimeInMillis + timeStampSkewMillis < notBeforeTimeMillis) {
             handleException("JSON Web Token is used before Not_Before_Time." +
@@ -570,6 +694,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @return true or false
      */
     private boolean checkValidityOfTheToken(Date issuedAtTime, long currentTimeInMillis, long timeStampSkewMillis) throws IdentityOAuth2Exception {
+
         long issuedAtTimeMillis = issuedAtTime.getTime();
         long rejectBeforeMillis = 1000L * 60 * validityPeriod;
         if (currentTimeInMillis + timeStampSkewMillis - issuedAtTimeMillis >
@@ -595,6 +720,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      */
     private boolean checkCachedJTI(String jti, SignedJWT signedJWT, JWTCacheEntry entry, long currentTimeInMillis,
                                    long timeStampSkewMillis) throws IdentityOAuth2Exception {
+
         try {
             SignedJWT cachedJWT = entry.getJwt();
             long cachedJWTExpiryTimeMillis = cachedJWT.getJWTClaimsSet().getExpirationTime().getTime();
@@ -610,10 +736,10 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     log.debug("jti of the JWT has been validated successfully and cache updated");
                 }
             } else {
-                    handleException("JWT Token \n" + signedJWT.getHeader().toJSONObject().toString() + "\n"
-                            + signedJWT.getPayload().toJSONObject().toString() + "\n" +
-                            "Has been replayed before the allowed expiry time : "
-                            + cachedJWT.getJWTClaimsSet().getExpirationTime());
+                handleException("JWT Token \n" + signedJWT.getHeader().toJSONObject().toString() + "\n"
+                        + signedJWT.getPayload().toJSONObject().toString() + "\n" +
+                        "Has been replayed before the allowed expiry time : "
+                        + cachedJWT.getJWTClaimsSet().getExpirationTime());
             }
         } catch (ParseException e) {
             handleException("Unable to parse the cached jwt assertion : " + entry.getEncodedJWt());
@@ -625,6 +751,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @param signedJWT the signedJWT to be logged
      */
     private void logJWT(SignedJWT signedJWT) {
+
         log.debug("JWT Header: " + signedJWT.getHeader().toJSONObject().toString());
         log.debug("JWT Payload: " + signedJWT.getPayload().toJSONObject().toString());
         log.debug("Signature: " + signedJWT.getSignature().toString());
@@ -730,6 +857,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      */
     protected X509Certificate resolveSignerCertificate(JWSHeader header,
                                                        IdentityProvider idp) throws IdentityOAuth2Exception {
+
         X509Certificate x509Certificate = null;
         try {
             x509Certificate = (X509Certificate) IdentityApplicationManagementUtil
@@ -758,12 +886,95 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @param customClaims a map of custom claims
      * @return whether the token is valid based on other claim values
      */
-    protected boolean validateCustomClaims(Map< String, Object > customClaims) {
+    protected boolean validateCustomClaims(Map<String, Object> customClaims) {
+
         return true;
     }
 
     private void handleException(String errorMessage) throws IdentityOAuth2Exception {
+
         log.error(errorMessage);
         throw new IdentityOAuth2Exception(errorMessage);
+    }
+
+    private EncryptedJWT getEncryptedJWT(OAuthTokenReqMessageContext tokReqMsgCtx) {
+
+        RequestParameter[] params = tokReqMsgCtx.getOauth2AccessTokenReqDTO().getRequestParameters();
+        String assertion = null;
+        if (params != null) {
+            for (RequestParameter param : params) {
+                if (JWTConstants.OAUTH_JWT_ASSERTION.equals(param.getKey())) {
+                    assertion = param.getValue()[0];
+                    break;
+                }
+            }
+        }
+        if (StringUtils.isEmpty(assertion)) {
+            if (log.isDebugEnabled()) {
+                log.debug("The assertion is empty.");
+            }
+            return null;
+        }
+
+        try {
+            EncryptedJWT encryptedJWT = EncryptedJWT.parse(assertion);
+            return encryptedJWT;
+        } catch (ParseException e) {
+            if (log.isDebugEnabled()) {
+                log.debug("Error while parsing the assertion. The assertion is not encrypted.");
+            }
+            return null;
+        }
+    }
+
+    private static RSAPrivateKey getPrivateKey(String tenantDomain) throws IdentityOAuth2Exception {
+
+        Key privateKey;
+        int tenantId = OAuth2Util.getTenantId(tenantDomain);
+        if (!(privateKeys.containsKey(tenantId))) {
+
+            try {
+                IdentityTenantUtil.initializeRegistry(tenantId, tenantDomain);
+            } catch (IdentityException e) {
+                throw new IdentityOAuth2Exception("Error occurred while loading registry for tenant " + tenantDomain,
+                        e);
+            }
+            // get tenant's key store manager
+            KeyStoreManager tenantKSM = KeyStoreManager.getInstance(tenantId);
+
+            if (!MultitenantConstants.SUPER_TENANT_DOMAIN_NAME.equals(tenantDomain)) {
+                // derive key store name
+                String ksName = tenantDomain.trim().replace(".", "-");
+                String jksName = ksName + ".jks";
+                // obtain private key
+                privateKey = tenantKSM.getPrivateKey(jksName, tenantDomain);
+
+            } else {
+                try {
+                    privateKey = tenantKSM.getDefaultPrivateKey();
+                } catch (Exception e) {
+                    //Intentionally catch Exception as an Exception is thrown from the above layer.
+                    throw new IdentityOAuth2Exception("Error while obtaining private key for super tenant", e);
+                }
+            }
+            //privateKey will not be null always
+            privateKeys.put(tenantId, privateKey);
+        } else {
+            //privateKey will not be null because containsKey() true says given key is exist and ConcurrentHashMap
+            // does not allow to store null values
+            privateKey = privateKeys.get(tenantId);
+        }
+        return (RSAPrivateKey) privateKey;
+    }
+
+    private boolean isEncryptedJWTSigned(String payload) {
+
+        if (StringUtils.isNotEmpty(payload)) {
+            String[] parts = payload.split(".");
+            if (parts.length == 3 && StringUtils.isNotEmpty(parts[2])) {
+                return true;
+            }
+        }
+        return false;
     }
 }
