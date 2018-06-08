@@ -179,9 +179,9 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     @Override
     public boolean validateGrant(OAuthTokenReqMessageContext tokReqMsgCtx) throws IdentityOAuth2Exception {
 //        super.validateGrant(tokReqMsgCtx); //This line was commented to work with IS 5.2.0
-      
+
         SignedJWT signedJWT = null;
-        IdentityProvider identityProvider;
+        IdentityProvider identityProvider = null;
         String tokenEndPointAlias = null;
         JWTClaimsSet claimsSet = null;
 
@@ -212,7 +212,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     log.debug("The assertion is successfully decrypted.");
                 }
             } catch (JOSEException e) {
-                handleException("Error when decrypting the encrypted JWT." + e.getMessage());
+                String errorMessage = "Error when decrypting the encrypted JWT." + e.getMessage();
+                throw new IdentityOAuth2Exception(errorMessage, e);
             }
             try {
                 // If the assertion is a nested JWT.
@@ -228,8 +229,9 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                             log.debug("The encrypted JWT is not signed. Obtained the claim set of the encrypted JWT.");
                         }
                     } catch (ParseException ex) {
-                        handleException("Error when trying to retrieve claimsSet from the encrypted JWT." +
-                                ex.getMessage());
+                        String errorMessage = "Error when trying to retrieve claimsSet from the encrypted JWT." +
+                                ex.getMessage();
+                        throw new IdentityOAuth2Exception(errorMessage, ex);
                     }
                 } else {
                     // If encrypted JWT is not signed.
@@ -240,8 +242,9 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     }
                 }
             } catch (ParseException e) {
-                handleException("Unexpected number of Base64URL parts of the nested JWT payload. Expected number" +
-                        " of parts must be three. " + e.getMessage());
+                String errorMessage = "Unexpected number of Base64URL parts of the nested JWT payload. Expected number" +
+                        " of parts must be three. ";
+                throw new IdentityOAuth2Exception(errorMessage, e);
             }
         }
 
@@ -411,6 +414,11 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     public OAuth2AccessTokenRespDTO issue(OAuthTokenReqMessageContext tokenReqMsgCtx) throws IdentityOAuth2Exception {
 
         OAuth2AccessTokenRespDTO responseDTO = super.issue(tokenReqMsgCtx);
+        AuthenticatedUser user = tokenReqMsgCtx.getAuthorizedUser();
+        Map<ClaimMapping, String> userAttributes = user.getUserAttributes();
+        if (MapUtils.isNotEmpty(userAttributes)) {
+            ClaimsUtil.addUserAttributesToCache(responseDTO, tokenReqMsgCtx, userAttributes);
+        }
         String[] scope = tokenReqMsgCtx.getScope();
         if (OAuth2Util.isOIDCAuthzRequest(scope)) {
             Map<String, Object> customClaims = (Map<String, Object>) tokenReqMsgCtx.getProperty(JWT_ASSERTION_CLAIM);
@@ -443,7 +451,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     /**
      * This method is used to add custom claims to the cache.
      *
-     * @param tokenRespDTO tokenResponseDTO
+     * @param tokenRespDTO   tokenResponseDTO
      * @param userAttributes user attributes to be stored in the cache
      */
     protected static void addUserAttributesToCache(OAuth2AccessTokenRespDTO tokenRespDTO,
@@ -469,7 +477,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @param authenticatedSubjectIdentifier Authenticated Subject Identifier.
      */
     protected void setAuthorizedUser(OAuthTokenReqMessageContext tokenReqMsgCtx, IdentityProvider identityProvider,
-            String authenticatedSubjectIdentifier) {
+                                     String authenticatedSubjectIdentifier) {
 
         AuthenticatedUser authenticatedUser;
         if (Boolean.parseBoolean(IdentityUtil.getProperty(OAUTH_SPLIT_AUTHZ_USER_3_WAY))) {
@@ -482,6 +490,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         authenticatedUser.setFederatedUser(true);
         tokenReqMsgCtx.setAuthorizedUser(authenticatedUser);
     }
+
     /**
      * Handle the custom claims and add it to the relevant authorized user, in the validation phase, so that when
      * issuing the access token we could use the same attributes later.
@@ -492,7 +501,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @throws IdentityOAuth2Exception Identity Oauth2 Exception
      */
     protected void handleCustomClaims(OAuthTokenReqMessageContext tokReqMsgCtx, Map<String, Object> customClaims,
-            IdentityProvider identityProvider) throws IdentityOAuth2Exception {
+                                      IdentityProvider identityProvider) throws IdentityOAuth2Exception {
 
         Map<String, String> customClaimMap = getCustomClaims(customClaims);
         Map<String, String> mappedClaims;
@@ -507,18 +516,6 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             user.setUserAttributes(FrameworkUtils.buildClaimMappings(mappedClaims));
         }
         tokReqMsgCtx.setAuthorizedUser(user);
-    }
-
-    @Override
-    public OAuth2AccessTokenRespDTO issue(OAuthTokenReqMessageContext tokReqMsgCtx) throws IdentityOAuth2Exception {
-
-        OAuth2AccessTokenRespDTO tokenRespDTO = super.issue(tokReqMsgCtx);
-        AuthenticatedUser user = tokReqMsgCtx.getAuthorizedUser();
-        Map<ClaimMapping, String>  userAttributes = user.getUserAttributes();
-        if (MapUtils.isNotEmpty(userAttributes)) {
-            ClaimsUtil.addUserAttributesToCache(tokenRespDTO, tokReqMsgCtx, userAttributes);
-        }
-        return tokenRespDTO;
     }
 
     /**
@@ -558,7 +555,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
         RequestParameter[] params = tokReqMsgCtx.getOauth2AccessTokenReqDTO().getRequestParameters();
         String assertion = null;
-        SignedJWT signedJWT = null;
+        SignedJWT signedJWT;
         for (RequestParameter param : params) {
             if (param.getKey().equals(JWTConstants.OAUTH_JWT_ASSERTION)) {
                 assertion = param.getValue()[0];
@@ -575,7 +572,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 logJWT(signedJWT);
             }
         } catch (ParseException e) {
-            handleException("Error while parsing the JWT" + e.getMessage());
+            String errorMessage = "Error while parsing the JWT.";
+            throw new IdentityOAuth2Exception(errorMessage, e);
         }
         return signedJWT;
     }
@@ -973,15 +971,10 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
         if (StringUtils.isNotEmpty(payload)) {
             String[] parts = payload.split(".");
-            if (parts.length == 3) {
-                if (StringUtils.isNotEmpty(parts[2].toString())) {
-                    return true;
-                }
-                return false;
+            if (parts.length == 3 && StringUtils.isNotEmpty(parts[2])) {
+                return true;
             }
-            return false;
-        } else {
-            return false;
         }
+        return false;
     }
 }
