@@ -45,9 +45,6 @@ import org.wso2.carbon.identity.application.common.util.IdentityApplicationManag
 import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
-import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCache;
-import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCacheEntry;
-import org.wso2.carbon.identity.oauth.cache.AuthorizationGrantCacheKey;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenRespDTO;
@@ -91,7 +88,6 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static final String ERROR_GET_RESIDENT_IDP =
             "Error while getting Resident Identity Provider of '%s' tenant.";
     private static Map<Integer, Key> privateKeys = new ConcurrentHashMap<>();
-    private static final String JWT_ASSERTION_CLAIM = "JWT_ASSERTION_CLAIM";
 
     private String tenantDomain;
     private int validityPeriod;
@@ -402,71 +398,10 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         if (log.isDebugEnabled()) {
             log.debug("Issuer(iss) of the JWT validated successfully");
         }
-        tokReqMsgCtx.addProperty(JWT_ASSERTION_CLAIM, customClaims);
-
         if (OAuth2Util.isOIDCAuthzRequest(tokReqMsgCtx.getScope())) {
             handleCustomClaims(tokReqMsgCtx, customClaims, identityProvider);
         }
         return true;
-    }
-
-    @Override
-    public OAuth2AccessTokenRespDTO issue(OAuthTokenReqMessageContext tokenReqMsgCtx) throws IdentityOAuth2Exception {
-
-        OAuth2AccessTokenRespDTO responseDTO = super.issue(tokenReqMsgCtx);
-        AuthenticatedUser user = tokenReqMsgCtx.getAuthorizedUser();
-        Map<ClaimMapping, String> userAttributes = user.getUserAttributes();
-        if (MapUtils.isNotEmpty(userAttributes)) {
-            ClaimsUtil.addUserAttributesToCache(responseDTO, tokenReqMsgCtx, userAttributes);
-        }
-        String[] scope = tokenReqMsgCtx.getScope();
-        if (OAuth2Util.isOIDCAuthzRequest(scope)) {
-            Map<String, Object> customClaims = (Map<String, Object>) tokenReqMsgCtx.getProperty(JWT_ASSERTION_CLAIM);
-
-            if (customClaims != null) {
-                // Not converting claims. Sending the claim uris in original format.
-                Map<ClaimMapping, String> claimMappings = buildClaimMappings(customClaims);
-                addUserAttributesToCache(responseDTO, claimMappings);
-            }
-        }
-
-        return responseDTO;
-    }
-
-    private static Map<ClaimMapping, String> buildClaimMappings(Map<String, Object> attributeValue) {
-
-        Map<ClaimMapping, String> claimMap = new HashMap<>();
-        for (Object entryObject : attributeValue.entrySet()) {
-            Map.Entry<String, Object> entry = (Map.Entry<String, Object>) entryObject;
-            if (entry.getValue() != null) {
-                String value = entry.getValue().toString();
-                claimMap.put(ClaimMapping.build((String) entry.getKey(), (String) entry.getKey(), (String) null, false),
-                        value);
-            }
-        }
-
-        return claimMap;
-    }
-
-    /**
-     * This method is used to add custom claims to the cache.
-     *
-     * @param tokenRespDTO   tokenResponseDTO
-     * @param userAttributes user attributes to be stored in the cache
-     */
-    protected static void addUserAttributesToCache(OAuth2AccessTokenRespDTO tokenRespDTO,
-                                                   Map<ClaimMapping, String> userAttributes) {
-
-        AuthorizationGrantCacheKey authorizationGrantCacheKey = new AuthorizationGrantCacheKey(
-                tokenRespDTO.getAccessToken());
-        AuthorizationGrantCacheEntry authorizationGrantCacheEntry = new AuthorizationGrantCacheEntry(userAttributes);
-
-        if (StringUtils.isNotBlank(tokenRespDTO.getTokenId())) {
-            authorizationGrantCacheEntry.setTokenId(tokenRespDTO.getTokenId());
-        }
-
-        AuthorizationGrantCache.getInstance()
-                .addToCacheByToken(authorizationGrantCacheKey, authorizationGrantCacheEntry);
     }
 
     /**
@@ -516,6 +451,19 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             user.setUserAttributes(FrameworkUtils.buildClaimMappings(mappedClaims));
         }
         tokReqMsgCtx.setAuthorizedUser(user);
+    }
+
+    @Override
+    public OAuth2AccessTokenRespDTO issue(OAuthTokenReqMessageContext tokReqMsgCtx)
+            throws IdentityOAuth2Exception {
+
+        OAuth2AccessTokenRespDTO tokenRespDTO = super.issue(tokReqMsgCtx);
+        AuthenticatedUser user = tokReqMsgCtx.getAuthorizedUser();
+        Map<ClaimMapping, String> userAttributes = user.getUserAttributes();
+        if (MapUtils.isNotEmpty(userAttributes)) {
+            ClaimsUtil.addUserAttributesToCache(tokenRespDTO, tokReqMsgCtx, userAttributes);
+        }
+        return tokenRespDTO;
     }
 
     /**
