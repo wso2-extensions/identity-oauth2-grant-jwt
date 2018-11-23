@@ -20,11 +20,18 @@ package org.wso2.carbon.identity.oauth2.grant.jwt.internal;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.osgi.service.component.ComponentContext;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
+import org.wso2.carbon.identity.core.util.IdentityCoreInitializedEvent;
 
-/**
- * @scr.component name="identity.oauth2.grant.jwt.component" immediate="true"
- */
+@Component(
+        name = "identity.oauth2.grant.jwt.component",
+        immediate = true
+)
 public class JWTServiceComponent {
+
     private static Log log = LogFactory.getLog(JWTServiceComponent.class);
 
     protected void activate(ComponentContext ctxt) {
@@ -37,5 +44,25 @@ public class JWTServiceComponent {
         if (log.isDebugEnabled()) {
             log.debug("JWT grant handler is deactivated");
         }
+    }
+
+    @Reference(
+            name = "identityCoreInitializedEventService",
+            service = org.wso2.carbon.identity.core.util.IdentityCoreInitializedEvent.class,
+            cardinality = ReferenceCardinality.MANDATORY,
+            policy = ReferencePolicy.DYNAMIC,
+            unbind = "unsetIdentityCoreInitializedEventService"
+    )
+    protected void setIdentityCoreInitializedEventService(IdentityCoreInitializedEvent identityCoreInitializedEvent) {
+
+        /* reference IdentityCoreInitializedEvent service to guarantee that this component will wait until identity core
+         is activated. As we use IdentityUtils for reading JWT grant related properties, we should making sure identity
+         core is activated. */
+    }
+
+    protected void unsetIdentityCoreInitializedEventService(IdentityCoreInitializedEvent identityCoreInitializedEvent) {
+
+        /*  IdentityCoreInitializedEvent un-registration is ignored as we do not keep a reference during
+        initialization. */
     }
 }
