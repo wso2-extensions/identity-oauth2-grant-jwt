@@ -60,8 +60,6 @@ import org.wso2.carbon.idp.mgt.IdentityProviderManagementException;
 import org.wso2.carbon.idp.mgt.IdentityProviderManager;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.security.Key;
 import java.security.PublicKey;
 import java.security.cert.CertificateException;
@@ -73,8 +71,12 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.DEFAULT_IAT_VALIDITY_PERIOD;
+import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_ENABLE_IAT_VALIDATION;
+import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_ENABLE_JWT_CACHE;
+import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_IAT_VALIDITY_PERIOD;
 
 /**
  * Class to handle JSON Web Token(JWT) grant type
@@ -91,6 +93,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
     private String tenantDomain;
     private int validityPeriod;
+    private boolean validateIAT = true;
     private JWTCache jwtCache;
     private boolean cacheUsedJTI;
 
@@ -102,28 +105,53 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     public void init() throws IdentityOAuth2Exception {
 
         super.init();
-        String resourceName = JWTConstants.PROPERTIES_FILE;
 
-        ClassLoader loader = JWTBearerGrantHandler.class.getClassLoader();
-        Properties prop = new Properties();
-        InputStream resourceStream = loader.getResourceAsStream(resourceName);
-        try {
-            prop.load(resourceStream);
-            validityPeriod = Integer.parseInt(prop.getProperty(JWTConstants.VALIDITY_PERIOD));
-            cacheUsedJTI = Boolean.parseBoolean(prop.getProperty(JWTConstants.CACHE_USED_JTI));
-            if (cacheUsedJTI) {
-                this.jwtCache = JWTCache.getInstance();
-            }
-        } catch (IOException e) {
-            throw new IdentityOAuth2Exception("Can not find the file", e);
-        } catch (NumberFormatException e) {
-            throw new IdentityOAuth2Exception("Invalid Validity period", e);
-        } finally {
+        /**
+         * From identity.xml following configs are read.
+         *
+         * <OAuth>
+         *     <JWTGrant>
+         *         <EnableIATValidation>true</EnableIATValidation>
+         *         <IATValidityPeriod>30</IATValidityPeriod>
+         *         <EnableJWTCache>false</EnableJWTCache>
+         *     </JWTGrant>
+         * </OAuth>
+         */
+
+        String validateIATProp = IdentityUtil.getProperty(PROP_ENABLE_IAT_VALIDATION);
+
+        if (StringUtils.isNotBlank(validateIATProp)) {
+            validateIAT =  Boolean.parseBoolean(validateIATProp);
+        }
+
+        String validityPeriodProp = IdentityUtil.getProperty(PROP_IAT_VALIDITY_PERIOD);
+
+        if (StringUtils.isNotBlank(validityPeriodProp) && validateIAT) {
+
             try {
-                resourceStream.close();
-            } catch (IOException e) {
-                log.error("Error while closing the stream");
+                validityPeriod = Integer.parseInt(validityPeriodProp);
+            } catch (NumberFormatException e) {
+                validityPeriod = DEFAULT_IAT_VALIDITY_PERIOD;
+                log.warn("Invalid value: " + validityPeriodProp + " is set for IAT validity period. Using default " +
+                         "value: " + validityPeriod + " minutes.");
             }
+        }
+
+        String cacheJWTProp = IdentityUtil.getProperty(PROP_ENABLE_JWT_CACHE);
+
+        if (StringUtils.isNotBlank(cacheJWTProp)) {
+            cacheUsedJTI = Boolean.parseBoolean(cacheJWTProp);
+            if (cacheUsedJTI) {
+                jwtCache = JWTCache.getInstance();
+            }
+        }
+
+        if (log.isDebugEnabled()) {
+            log.debug("Validate IAT is set to: " + validateIAT + " for JWT grant.");
+            if (validateIAT) {
+                log.debug("IAT validity period is set to: " + validityPeriod + " minutes for JWT grant.");
+            }
+            log.debug("Caching JWT is set to: " + cacheUsedJTI + " for JWT grant.");
         }
     }
 
@@ -135,10 +163,10 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      * @return resident Identity Provider
      * @throws IdentityOAuth2Exception
      */
-    private IdentityProvider getResidentityIDPForIssuer(String tenantDomain, String jwtIssuer) throws IdentityOAuth2Exception {
+    private IdentityProvider getResidentIDPForIssuer(String tenantDomain, String jwtIssuer) throws IdentityOAuth2Exception {
 
         String issuer = StringUtils.EMPTY;
-        IdentityProvider residentIdentityProvider = null;
+        IdentityProvider residentIdentityProvider;
         try {
             residentIdentityProvider = IdentityProviderManager.getInstance().getResidentIdP(tenantDomain);
         } catch (IdentityProviderManagementException e) {
@@ -273,7 +301,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 // name "default". We need to handle this case.
                 if (StringUtils.equalsIgnoreCase(identityProvider.getIdentityProviderName(), DEFAULT_IDP_NAME)) {
                     //check whether this jwt was issued by the resident identity provider
-                    identityProvider = getResidentityIDPForIssuer(tenantDomain, jwtIssuer);
+                    identityProvider = getResidentIDPForIssuer(tenantDomain, jwtIssuer);
                     if (identityProvider == null) {
                         handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
                     }
@@ -342,6 +370,10 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 if (log.isDebugEnabled()) {
                     log.debug("Issued At Time(iat) not found in JWT. Continuing Validation");
                 }
+            } else if (!validateIAT) {
+                if (log.isDebugEnabled()) {
+                    log.debug("Issued At Time (iat) validation is disabled for the JWT.");
+                }
             } else {
                 boolean checkedValidityToken = checkValidityOfTheToken(issuedAtTime, currentTimeInMillis,
                         timeStampSkewMillis);
@@ -384,7 +416,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             if (log.isDebugEnabled()) {
                 log.debug("JWT Token was validated successfully");
             }
-            if (cacheUsedJTI) {
+            if (cacheUsedJTI && (jti != null)) {
                 jwtCache.addToCache(jti, new JWTCacheEntry(signedJWT));
             }
             if (log.isDebugEnabled()) {
