@@ -126,14 +126,19 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
         String validityPeriodProp = IdentityUtil.getProperty(PROP_IAT_VALIDITY_PERIOD);
 
-        if (StringUtils.isNotBlank(validityPeriodProp) && validateIAT) {
-
-            try {
-                validityPeriod = Integer.parseInt(validityPeriodProp);
-            } catch (NumberFormatException e) {
+        if (validateIAT) {
+            if (StringUtils.isNotBlank(validityPeriodProp)) {
+                try {
+                    validityPeriod = Integer.parseInt(validityPeriodProp);
+                } catch (NumberFormatException e) {
+                    validityPeriod = DEFAULT_IAT_VALIDITY_PERIOD;
+                    log.warn("Invalid value: " + validityPeriodProp + " is set for IAT validity period. Using default "
+                            + "value: " + validityPeriod + " minutes.");
+                }
+            } else {
                 validityPeriod = DEFAULT_IAT_VALIDITY_PERIOD;
-                log.warn("Invalid value: " + validityPeriodProp + " is set for IAT validity period. Using default " +
-                         "value: " + validityPeriod + " minutes.");
+                log.warn("Empty value is set for IAT validity period. Using default value: " + validityPeriod
+                        + " minutes.");
             }
         }
 
