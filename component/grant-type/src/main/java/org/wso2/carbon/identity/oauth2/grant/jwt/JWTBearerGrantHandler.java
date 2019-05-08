@@ -460,6 +460,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     .createLocalAuthenticatedUserFromSubjectIdentifier(authenticatedSubjectIdentifier);
         }
         authenticatedUser.setFederatedUser(true);
+        authenticatedUser.setFederatedIdPName(identityProvider.getIdentityProviderName());
         tokenReqMsgCtx.setAuthorizedUser(authenticatedUser);
     }
 
