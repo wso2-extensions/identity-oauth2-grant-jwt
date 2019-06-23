@@ -26,6 +26,7 @@ import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.EncryptedJWT;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import net.minidev.json.JSONArray;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
@@ -67,6 +68,7 @@ import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.text.ParseException;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -515,7 +517,13 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         Map<String, String> customClaimMap = new HashMap<>();
         for (Map.Entry<String, Object> entry : customClaims.entrySet()) {
             Object value = entry.getValue();
-            customClaimMap.put(entry.getKey(), value.toString());
+            if (value instanceof JSONArray) {
+                String multiValueSeparator = FrameworkUtils.getMultiAttributeSeparator();
+                String multiValuesWithSeparator = StringUtils.join((Collection) value, multiValueSeparator);
+                customClaimMap.put(entry.getKey(), multiValuesWithSeparator);
+            } else {
+                customClaimMap.put(entry.getKey(), value.toString());
+            }
         }
         return customClaimMap;
     }
