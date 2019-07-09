@@ -30,4 +30,5 @@ public class JWTConstants {
     public static final String PROP_IAT_VALIDITY_PERIOD = "OAuth.JWTGrant.IATValidityPeriod";
     public static final String PROP_ENABLE_JWT_CACHE = "OAuth.JWTGrant.EnableJWTCache";
     public static final int DEFAULT_IAT_VALIDITY_PERIOD = 30;
+    public static final String PROP_REGISTERED_JWT = "OAuth.JWTGrant.RegisteredClaim";
 }
