@@ -521,13 +521,13 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         Map<String, String> customClaimMap = new HashMap<>();
         for (Map.Entry<String, Object> entry : customClaims.entrySet()) {
             String entryKey = entry.getKey();
-            boolean isNotRegisteredClaim = true;
+            boolean isRegisteredClaim = false;
             for (int registeredClaim = 0; registeredClaim < registeredClaimNames.length; registeredClaim++) {
                 if (registeredClaimNames[registeredClaim].equals((entryKey))) {
-                    isNotRegisteredClaim = false;
+                    isRegisteredClaim = true;
                 }
             }
-            if (isNotRegisteredClaim) {
+            if (!isRegisteredClaim) {
                 Object value = entry.getValue();
                 customClaimMap.put(entryKey, value.toString());
             }
