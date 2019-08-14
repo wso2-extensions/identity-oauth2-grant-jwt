@@ -79,6 +79,7 @@ import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.DEFAULT_IAT
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_ENABLE_IAT_VALIDATION;
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_ENABLE_JWT_CACHE;
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_IAT_VALIDITY_PERIOD;
+import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_REGISTERED_JWT;
 
 /**
  * Class to handle JSON Web Token(JWT) grant type
@@ -92,6 +93,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static final String ERROR_GET_RESIDENT_IDP =
             "Error while getting Resident Identity Provider of '%s' tenant.";
     private static Map<Integer, Key> privateKeys = new ConcurrentHashMap<>();
+    private String[] registeredClaimNames = new String[] { "iss", "sub", "aud", "exp", "nbf", "iat", "jti" };
 
     private String tenantDomain;
     private int validityPeriod;
@@ -142,6 +144,10 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 log.warn("Empty value is set for IAT validity period. Using default value: " + validityPeriod
                         + " minutes.");
             }
+        }
+        String registeredClaims = IdentityUtil.getProperty(PROP_REGISTERED_JWT);
+        if (StringUtils.isNotBlank(registeredClaims)) {
+            registeredClaimNames = registeredClaims.split("\\s*,\\s*");
         }
 
         String cacheJWTProp = IdentityUtil.getProperty(PROP_ENABLE_JWT_CACHE);
@@ -516,13 +522,22 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
         Map<String, String> customClaimMap = new HashMap<>();
         for (Map.Entry<String, Object> entry : customClaims.entrySet()) {
-            Object value = entry.getValue();
-            if (value instanceof JSONArray) {
-                String multiValueSeparator = FrameworkUtils.getMultiAttributeSeparator();
-                String multiValuesWithSeparator = StringUtils.join((Collection) value, multiValueSeparator);
-                customClaimMap.put(entry.getKey(), multiValuesWithSeparator);
-            } else {
-                customClaimMap.put(entry.getKey(), value.toString());
+            String entryKey = entry.getKey();
+            boolean isRegisteredClaim = false;
+            for (int registeredClaim = 0; registeredClaim < registeredClaimNames.length; registeredClaim++) {
+                if (registeredClaimNames[registeredClaim].equals((entryKey))) {
+                    isRegisteredClaim = true;
+                }
+            }
+            if (!isRegisteredClaim) {
+                Object value = entry.getValue();
+                if (value instanceof JSONArray) {
+                    String multiValueSeparator = FrameworkUtils.getMultiAttributeSeparator();
+                    String multiValuesWithSeparator = StringUtils.join((Collection) value, multiValueSeparator);
+                    customClaimMap.put(entry.getKey(), multiValuesWithSeparator);
+                } else {
+                    customClaimMap.put(entry.getKey(), value.toString());
+                }
             }
         }
         return customClaimMap;

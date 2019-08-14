@@ -32,7 +32,9 @@ import org.wso2.carbon.identity.application.authentication.framework.model.Authe
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
 import org.wso2.carbon.identity.application.common.model.IdentityProvider;
 import org.wso2.carbon.identity.base.IdentityException;
+import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
+import org.wso2.carbon.identity.oauth2.token.OauthTokenIssuer;
 import org.wso2.carbon.identity.oauth2.util.ClaimsUtil;
 
 import java.util.ArrayList;
@@ -44,7 +46,7 @@ import static org.powermock.api.mockito.PowerMockito.when;
 /**
  * This is a test class for {@link JWTBearerGrantHandler}.
  */
-@PrepareForTest({ClaimsUtil.class})
+@PrepareForTest({ ClaimsUtil.class, OAuthServerConfiguration.class })
 public class JWTBearerGrantHandlerTest {
 
     @ObjectFactory
@@ -57,8 +59,12 @@ public class JWTBearerGrantHandlerTest {
             dataProvider = "customClaimDataProvider", dependsOnMethods = "testHandleCustomClaims")
     public void testCustomClaims(Map<String, Object> customClaims) {
 
-        JWTBearerGrantHandler jwtBearerGrantHandler = Mockito.mock(JWTBearerGrantHandler.class);
-        Mockito.doCallRealMethod().when(jwtBearerGrantHandler).getCustomClaims(Mockito.anyMap());
+        PowerMockito.mockStatic(OAuthServerConfiguration.class);
+        OAuthServerConfiguration mockOauthServerConfig = Mockito.mock(OAuthServerConfiguration.class);
+        OauthTokenIssuer identityOauthTokenIssuer = Mockito.mock(OauthTokenIssuer.class);
+        when(OAuthServerConfiguration.getInstance()).thenReturn(mockOauthServerConfig);
+        when(mockOauthServerConfig.getIdentityOauthTokenIssuer()).thenReturn(identityOauthTokenIssuer);
+        JWTBearerGrantHandler jwtBearerGrantHandler = new JWTBearerGrantHandler();
         Map<String, String> customClaimsMap = jwtBearerGrantHandler.getCustomClaims(customClaims);
 
         for (Map.Entry<String, Object> entry : customClaims.entrySet()) {
@@ -81,11 +87,12 @@ public class JWTBearerGrantHandlerTest {
             }
         });
 
-        JWTBearerGrantHandler jwtBearerGrantHandler = Mockito.mock(JWTBearerGrantHandler.class);
-        Mockito.doCallRealMethod().when(jwtBearerGrantHandler)
-                .handleCustomClaims(Mockito.any(OAuthTokenReqMessageContext.class), Mockito.anyMap(),
-                        Mockito.any(IdentityProvider.class));
-        Mockito.doCallRealMethod().when(jwtBearerGrantHandler).getCustomClaims(Mockito.anyMap());
+        PowerMockito.mockStatic(OAuthServerConfiguration.class);
+        OAuthServerConfiguration mockOauthServerConfig = Mockito.mock(OAuthServerConfiguration.class);
+        OauthTokenIssuer identityOauthTokenIssuer = Mockito.mock(OauthTokenIssuer.class);
+        when(OAuthServerConfiguration.getInstance()).thenReturn(mockOauthServerConfig);
+        when(mockOauthServerConfig.getIdentityOauthTokenIssuer()).thenReturn(identityOauthTokenIssuer);
+        JWTBearerGrantHandler jwtBearerGrantHandler = new JWTBearerGrantHandler();
 
         OAuthTokenReqMessageContext oAuthTokenReqMessageContext = Mockito.mock(OAuthTokenReqMessageContext.class);
         IdentityProvider identityProvider = new IdentityProvider();
