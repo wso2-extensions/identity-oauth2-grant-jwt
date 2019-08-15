@@ -32,7 +32,7 @@ import org.wso2.carbon.identity.core.util.IdentityCoreInitializedEvent;
 )
 public class JWTServiceComponent {
 
-    private static Log log = LogFactory.getLog(JWTServiceComponent.class);
+    private static final Log log = LogFactory.getLog(JWTServiceComponent.class);
 
     protected void activate(ComponentContext ctxt) {
         if (log.isDebugEnabled()) {
