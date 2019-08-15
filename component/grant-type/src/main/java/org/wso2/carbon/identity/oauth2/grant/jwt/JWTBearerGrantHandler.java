@@ -86,7 +86,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
     private static final String OAUTH_SPLIT_AUTHZ_USER_3_WAY = "OAuth.SplitAuthzUser3Way";
     private static final String DEFAULT_IDP_NAME = "default";
-    private static Log log = LogFactory.getLog(JWTBearerGrantHandler.class);
+    private static final Log log = LogFactory.getLog(JWTBearerGrantHandler.class);
     private static final String OIDC_IDP_ENTITY_ID = "IdPEntityId";
     private static final String ERROR_GET_RESIDENT_IDP =
             "Error while getting Resident Identity Provider of '%s' tenant.";
