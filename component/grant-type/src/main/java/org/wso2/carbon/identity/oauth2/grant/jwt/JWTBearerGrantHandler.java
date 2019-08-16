@@ -32,6 +32,8 @@ import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.core.util.KeyStoreManager;
+import net.minidev.json.JSONArray;
+import java.util.Collection;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
@@ -529,7 +531,13 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             }
             if (!isRegisteredClaim) {
                 Object value = entry.getValue();
-                customClaimMap.put(entryKey, value.toString());
+                if (value instanceof JSONArray) {
+                    String multiValueSeparator = FrameworkUtils.getMultiAttributeSeparator();
+                    String multiValuesWithSeparator = StringUtils.join((Collection) value, multiValueSeparator);
+                    customClaimMap.put(entry.getKey(), multiValuesWithSeparator);
+                } else {
+                    customClaimMap.put(entry.getKey(), value.toString());
+                }
             }
         }
         return customClaimMap;
