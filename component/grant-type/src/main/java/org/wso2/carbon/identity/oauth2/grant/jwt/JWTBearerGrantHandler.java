@@ -33,7 +33,11 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.core.util.KeyStoreManager;
 import net.minidev.json.JSONArray;
+
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
 import java.util.Collection;
+
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
@@ -93,7 +97,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static final String ERROR_GET_RESIDENT_IDP =
             "Error while getting Resident Identity Provider of '%s' tenant.";
     private static Map<Integer, Key> privateKeys = new ConcurrentHashMap<>();
-    private String[] registeredClaimNames = new String[] { "iss", "sub", "aud", "exp", "nbf", "iat", "jti" };
+    private String[] registeredClaimNames = new String[]{"iss", "sub", "aud", "exp", "nbf", "iat", "jti"};
 
     private String tenantDomain;
     private int validityPeriod;
@@ -125,7 +129,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         String validateIATProp = IdentityUtil.getProperty(PROP_ENABLE_IAT_VALIDATION);
 
         if (StringUtils.isNotBlank(validateIATProp)) {
-            validateIAT =  Boolean.parseBoolean(validateIATProp);
+            validateIAT = Boolean.parseBoolean(validateIATProp);
         }
 
         String validityPeriodProp = IdentityUtil.getProperty(PROP_IAT_VALIDITY_PERIOD);
@@ -810,7 +814,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             }
         }
 
-        if (isJWKSEnabled && hasJWKSUri) {
+        if (false) {
             JWKSBasedJWTValidator jwksBasedJWTValidator = new JWKSBasedJWTValidator();
             return jwksBasedJWTValidator.validateSignature(signedJWT.getParsedString(), jwksUri, signedJWT.getHeader
                     ().getAlgorithm().getName(), null);
@@ -822,6 +826,14 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 handleException(
                         "Unable to locate certificate for Identity Provider " + idp.getDisplayName() + "; JWT " +
                                 header.toString());
+            }
+
+            try {
+                x509Certificate.checkValidity();
+            } catch (CertificateExpiredException e) {
+                throw new IdentityOAuth2Exception("X509Certificate has expired.", e);
+            } catch (CertificateNotYetValidException e) {
+                throw new IdentityOAuth2Exception("X509Certificate is not yet valid.", e);
             }
 
             String alg = signedJWT.getHeader().getAlgorithm().getName();
