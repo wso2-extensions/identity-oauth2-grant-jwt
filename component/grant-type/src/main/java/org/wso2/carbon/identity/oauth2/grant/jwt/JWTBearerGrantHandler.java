@@ -814,7 +814,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             }
         }
 
-        if (false) {
+        if (isJWKSEnabled && hasJWKSUri) {
             JWKSBasedJWTValidator jwksBasedJWTValidator = new JWKSBasedJWTValidator();
             return jwksBasedJWTValidator.validateSignature(signedJWT.getParsedString(), jwksUri, signedJWT.getHeader
                     ().getAlgorithm().getName(), null);
