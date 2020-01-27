@@ -96,6 +96,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static final String OIDC_IDP_ENTITY_ID = "IdPEntityId";
     private static final String ERROR_GET_RESIDENT_IDP =
             "Error while getting Resident Identity Provider of '%s' tenant.";
+    private static final String ENFORCE_CERTIFICATE_VALIDITY
+            = "JWTValidatorConfigs.EnforceCertificateExpiryTimeValidity";
     private static Map<Integer, Key> privateKeys = new ConcurrentHashMap<>();
     private String[] registeredClaimNames = new String[]{"iss", "sub", "aud", "exp", "nbf", "iat", "jti"};
 
@@ -828,13 +830,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                                 header.toString());
             }
 
-            try {
-                x509Certificate.checkValidity();
-            } catch (CertificateExpiredException e) {
-                throw new IdentityOAuth2Exception("X509Certificate has expired.", e);
-            } catch (CertificateNotYetValidException e) {
-                throw new IdentityOAuth2Exception("X509Certificate is not yet valid.", e);
-            }
+            checkValidity(x509Certificate);
 
             String alg = signedJWT.getHeader().getAlgorithm().getName();
             if (StringUtils.isEmpty(alg)) {
@@ -863,6 +859,32 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
             // At this point 'verifier' will never be null;
             return signedJWT.verify(verifier);
+        }
+    }
+
+    /**
+     * Check the validity of the x509Certificate.
+     *
+     * @param x509Certificate   x509Certificate
+     * @throws IdentityOAuth2Exception
+     */
+    private void checkValidity(X509Certificate x509Certificate) throws IdentityOAuth2Exception {
+
+        String isEnforceCertificateValidity = IdentityUtil.getProperty(ENFORCE_CERTIFICATE_VALIDITY);
+        if (StringUtils.isNotEmpty(isEnforceCertificateValidity)
+                && !Boolean.parseBoolean(isEnforceCertificateValidity)) {
+            if (log.isDebugEnabled()) {
+                log.debug("Check for the certificate validity is disabled.");
+            }
+            return;
+        }
+
+        try {
+            x509Certificate.checkValidity();
+        } catch (CertificateExpiredException e) {
+            throw new IdentityOAuth2Exception("X509Certificate has expired.", e);
+        } catch (CertificateNotYetValidException e) {
+            throw new IdentityOAuth2Exception("X509Certificate is not yet valid.", e);
         }
     }
 
