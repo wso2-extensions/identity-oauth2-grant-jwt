@@ -315,7 +315,17 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             handleException("Mandatory fields(Issuer, Subject, Expiration time or Audience) are empty in the given JSON Web Token.");
         }
         try {
-            identityProvider = IdentityProviderManager.getInstance().getIdPByName(jwtIssuer, tenantDomain);
+            identityProvider = IdentityProviderManager.getInstance().getIdPByMetadataProperty(
+                    IdentityApplicationConstants.IDP_ISSUER_NAME, jwtIssuer, tenantDomain, false);
+
+            if (identityProvider == null) {
+                if (log.isDebugEnabled()) {
+                    log.debug("IDP not found when retrieving for IDP using property: " +
+                            IdentityApplicationConstants.IDP_ISSUER_NAME + " with value: " + jwtIssuer +
+                            ". Attempting to retrieve IDP using IDP Name as issuer.");
+                }
+                identityProvider = IdentityProviderManager.getInstance().getIdPByName(jwtIssuer, tenantDomain);
+            }
             if (identityProvider != null) {
                 // if no IDPs were found for a given name, the IdentityProviderManager returns a dummy IDP with the
                 // name "default". We need to handle this case.
