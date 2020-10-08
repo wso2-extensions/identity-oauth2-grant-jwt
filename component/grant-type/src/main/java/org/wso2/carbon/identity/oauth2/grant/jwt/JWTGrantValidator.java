@@ -19,9 +19,12 @@
 package org.wso2.carbon.identity.oauth2.grant.jwt;
 
 import org.apache.oltu.oauth2.common.OAuth;
+import org.apache.oltu.oauth2.common.exception.OAuthProblemException;
 import org.apache.oltu.oauth2.common.validators.AbstractValidator;
 
 import javax.servlet.http.HttpServletRequest;
+
+import static org.wso2.carbon.identity.oauth.common.OAuthCommonUtil.validateContentTypes;
 
 /**
  * Grant validator for JSON Web Tokens
@@ -33,5 +36,11 @@ public class JWTGrantValidator extends AbstractValidator<HttpServletRequest> {
     public JWTGrantValidator() {
         requiredParams.add(OAuth.OAUTH_GRANT_TYPE);
         requiredParams.add(OAuth.OAUTH_ASSERTION);
+    }
+
+    @Override
+    public void validateContentType(HttpServletRequest request) throws OAuthProblemException {
+
+        validateContentTypes(request);
     }
 }
