@@ -26,18 +26,13 @@ import com.nimbusds.jose.crypto.RSASSAVerifier;
 import com.nimbusds.jwt.EncryptedJWT;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import net.minidev.json.JSONArray;
 import org.apache.commons.collections.MapUtils;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.carbon.core.util.KeyStoreManager;
-import net.minidev.json.JSONArray;
-
-import java.security.cert.CertificateExpiredException;
-import java.security.cert.CertificateNotYetValidException;
-import java.util.Collection;
-
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
@@ -69,10 +64,13 @@ import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 import java.security.Key;
 import java.security.PublicKey;
 import java.security.cert.CertificateException;
+import java.security.cert.CertificateExpiredException;
+import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.text.ParseException;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -469,11 +467,12 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         if (Boolean.parseBoolean(IdentityUtil.getProperty(OAUTH_SPLIT_AUTHZ_USER_3_WAY))) {
             authenticatedUser = OAuth2Util.getUserFromUserName(authenticatedSubjectIdentifier);
             authenticatedUser.setAuthenticatedSubjectIdentifier(authenticatedSubjectIdentifier);
+            authenticatedUser.setFederatedUser(true);
         } else {
             authenticatedUser = AuthenticatedUser
-                    .createLocalAuthenticatedUserFromSubjectIdentifier(authenticatedSubjectIdentifier);
+                    .createFederateAuthenticatedUserFromSubjectIdentifier(authenticatedSubjectIdentifier);
+            authenticatedUser.setUserName(authenticatedSubjectIdentifier);
         }
-        authenticatedUser.setFederatedUser(true);
         authenticatedUser.setFederatedIdPName(identityProvider.getIdentityProviderName());
         tokenReqMsgCtx.setAuthorizedUser(authenticatedUser);
     }
