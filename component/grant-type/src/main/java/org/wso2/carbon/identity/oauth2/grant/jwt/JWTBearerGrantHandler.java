@@ -414,7 +414,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 }
             }
             if (cacheUsedJTI && (jti != null)) {
-                JWTCacheEntry entry = (JWTCacheEntry) jwtCache.getValueFromCache(jti);
+                JWTCacheEntry entry = jwtCache.getValueFromCache(jti);
                 if (entry != null) {
                     if (checkCachedJTI(jti, signedJWT, entry, currentTimeInMillis, timeStampSkewMillis)) {
                         if (log.isDebugEnabled()) {

@@ -18,11 +18,10 @@
 
 package org.wso2.carbon.identity.oauth2.grant.jwt.cache;
 
-import org.wso2.carbon.identity.application.common.cache.BaseCache;
-import org.wso2.carbon.identity.application.common.cache.CacheEntry;
+import org.wso2.carbon.identity.application.authentication.framework.cache.AuthenticationBaseCache;
 import org.wso2.carbon.utils.CarbonUtils;
 
-public class JWTCache extends BaseCache {
+public class JWTCache extends AuthenticationBaseCache<String, JWTCacheEntry> {
     private static final JWTCache instance = new JWTCache("JWTCache");
 
     private JWTCache(String cacheName) {
@@ -34,12 +33,12 @@ public class JWTCache extends BaseCache {
         return instance;
     }
 
-    public void addToCache(String key, CacheEntry entry) {
+    public void addToCache(String key, JWTCacheEntry entry) {
         super.addToCache(key, entry);
     }
 
-    public CacheEntry getValueFromCache(String key) {
-        return (CacheEntry) super.getValueFromCache(key);
+    public JWTCacheEntry getValueFromCache(String key) {
+        return super.getValueFromCache(key);
     }
 
     public void clearCacheEntry(String key) {
