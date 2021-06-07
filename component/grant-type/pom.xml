@@ -47,6 +47,12 @@
         <dependency>
             <groupId>org.wso2.carbon.identity.framework</groupId>
             <artifactId>org.wso2.carbon.identity.application.common</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.wso2.carbon.commons</groupId>
+                    <artifactId>org.wso2.carbon.tenant.common</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.wso2.carbon.identity.framework</groupId>
