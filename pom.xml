@@ -105,12 +105,12 @@
             <dependency>
                 <groupId>org.apache.oltu.oauth2</groupId>
                 <artifactId>org.apache.oltu.oauth2.client</artifactId>
-                <version>0.31</version>
+                <version>${org.apache.oltu.oauth2.client.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.oltu.oauth2</groupId>
                 <artifactId>org.apache.oltu.oauth2.common</artifactId>
-                <version>1.0.1</version>
+                <version>${org.apache.oltu.oauth2.common.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.wso2.carbon</groupId>
@@ -364,7 +364,8 @@
         <carbon.identity.framework.version>5.20.66</carbon.identity.framework.version>
         <carbon.identity.oauth.version>6.4.80</carbon.identity.oauth.version>
         <carbon.kernel.version>4.6.0</carbon.kernel.version>
-        <org.apache.oltu.oauth2.client.version>1.0.0</org.apache.oltu.oauth2.client.version>
+        <org.apache.oltu.oauth2.client.version>0.31</org.apache.oltu.oauth2.client.version>
+        <org.apache.oltu.oauth2.common.version>1.0.1</org.apache.oltu.oauth2.common.version>
         <commons-collections.version>3.2.2.wso2v1</commons-collections.version>
         <commons-collections.wso2.osgi.version.range>[3.2.0,4.0.0)</commons-collections.wso2.osgi.version.range>
         <oltu.package.import.version.range>[1.0.0, 2.0.0)</oltu.package.import.version.range>
