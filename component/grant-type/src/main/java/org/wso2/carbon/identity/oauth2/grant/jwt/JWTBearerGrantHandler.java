@@ -524,7 +524,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         OAuth2AccessTokenRespDTO tokenRespDTO = super.issue(tokReqMsgCtx);
         AuthenticatedUser user = tokReqMsgCtx.getAuthorizedUser();
         Map<ClaimMapping, String> userAttributes = user.getUserAttributes();
-        if (MapUtils.isNotEmpty(userAttributes)) {
+        if (userAttributes != null) {
             ClaimsUtil.addUserAttributesToCache(tokenRespDTO, tokReqMsgCtx, userAttributes);
         }
         return tokenRespDTO;
