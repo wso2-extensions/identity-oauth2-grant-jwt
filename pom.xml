@@ -378,7 +378,7 @@
         <encoder.wso2.version>1.2.0.wso2v1</encoder.wso2.version>
         <nimbusds.version>7.3.0.wso2v1</nimbusds.version>
         <oltu.version>1.0.0.wso2v3</oltu.version>
-        <carbon.identity.package.import.version.range>[5.0.0, 6.0.0)</carbon.identity.package.import.version.range>
+        <carbon.identity.package.import.version.range>[5.0.0, 7.0.0)</carbon.identity.package.import.version.range>
         <carbon.identity.oauth.package.import.version.range>[6.0.0, 7.0.0)</carbon.identity.oauth.package.import.version.range>
         <carbon.kernel.package.import.version.range>[4.4.0, 5.0.0)</carbon.kernel.package.import.version.range>
         <nimbusds.osgi.version.range>[7.3.0,8.0.0)</nimbusds.osgi.version.range>
