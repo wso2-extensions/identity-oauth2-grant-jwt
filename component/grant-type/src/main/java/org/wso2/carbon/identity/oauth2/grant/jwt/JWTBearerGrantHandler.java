@@ -334,13 +334,13 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     //check whether this jwt was issued by the resident identity provider
                     identityProvider = getResidentIDPForIssuer(tenantDomain, jwtIssuer);
                     if (identityProvider == null) {
-                        handleClientException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
+                        handleClientException("No registered identity provider found for the JWT with issuer name : " + jwtIssuer);
                     }
                 }
 
                 tokenEndPointAlias = getTokenEndpointAlias(identityProvider);
             } else {
-                handleClientException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
+                handleClientException("No registered identity provider found for the JWT with issuer name : " + jwtIssuer);
             }
             if (signedJWT != null) {
                 signatureValid = validateSignature(signedJWT, identityProvider);
@@ -689,10 +689,13 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
         long expirationTimeInMillis = expirationTime.getTime();
         if ((currentTimeInMillis + timeStampSkewMillis) > expirationTimeInMillis) {
-            handleClientException("JSON Web Token is expired." +
-                    ", Expiration Time(ms) : " + expirationTimeInMillis +
-                    ", TimeStamp Skew : " + timeStampSkewMillis +
-                    ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            if (log.isDebugEnabled()) {
+                log.debug("JSON Web Token is expired." +
+                        ", Expiration Time(ms) : " + expirationTimeInMillis +
+                        ", TimeStamp Skew : " + timeStampSkewMillis +
+                        ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            }
+            handleClientException("JSON Web Token is expired.");
         }
         return true;
     }
@@ -710,10 +713,13 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
         long notBeforeTimeMillis = notBeforeTime.getTime();
         if (currentTimeInMillis + timeStampSkewMillis < notBeforeTimeMillis) {
-            handleClientException("JSON Web Token is used before Not_Before_Time." +
-                    ", Not Before Time(ms) : " + notBeforeTimeMillis +
-                    ", TimeStamp Skew : " + timeStampSkewMillis +
-                    ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            if (log.isDebugEnabled()) {
+                log.debug("JSON Web Token is used before Not_Before_Time." +
+                        ", Not Before Time(ms) : " + notBeforeTimeMillis +
+                        ", TimeStamp Skew : " + timeStampSkewMillis +
+                        ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            }
+            handleClientException("JSON Web Token is used before Not_Before_Time.");
         }
         return true;
     }
@@ -734,11 +740,14 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         long rejectBeforeMillis = 1000L * 60 * validityPeriod;
         if (currentTimeInMillis + timeStampSkewMillis - issuedAtTimeMillis >
                 rejectBeforeMillis) {
-            handleClientException("JSON Web Token is issued before the allowed time." +
-                    ", Issued At Time(ms) : " + issuedAtTimeMillis +
-                    ", Reject before limit(ms) : " + rejectBeforeMillis +
-                    ", TimeStamp Skew : " + timeStampSkewMillis +
-                    ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            if (log.isDebugEnabled()) {
+                log.debug("JSON Web Token is issued before the allowed time." +
+                        ", Issued At Time(ms) : " + issuedAtTimeMillis +
+                        ", Reject before limit(ms) : " + rejectBeforeMillis +
+                        ", TimeStamp Skew : " + timeStampSkewMillis +
+                        ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            }
+            handleClientException("JSON Web Token is issued before the allowed time.");
         }
         return true;
     }
