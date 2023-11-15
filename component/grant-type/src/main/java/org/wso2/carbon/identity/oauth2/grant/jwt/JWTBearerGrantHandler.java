@@ -242,7 +242,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             //The assertion is not an encrypted one.
             signedJWT = getSignedJWT(tokReqMsgCtx);
             if (signedJWT == null) {
-                handleException("No Valid Assertion was found for " + JWTConstants.OAUTH_JWT_BEARER_GRANT_TYPE);
+                handleClientException("No Valid Assertion was found for " + JWTConstants.OAUTH_JWT_BEARER_GRANT_TYPE);
             } else {
                 claimsSet = getClaimSet(signedJWT);
             }
@@ -293,7 +293,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         }
 
         if (claimsSet == null) {
-            handleException("Claim values are empty in the given JSON Web Token");
+            handleClientException("Claim values are empty in the given JSON Web Token");
         }
 
         String jwtIssuer = claimsSet.getIssuer();
@@ -312,7 +312,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         long timeStampSkewMillis = OAuthServerConfiguration.getInstance().getTimeStampSkewInSeconds() * 1000;
 
         if (StringUtils.isEmpty(jwtIssuer) || StringUtils.isEmpty(subject) || expirationTime == null || audience == null) {
-            handleException("Mandatory fields(Issuer, Subject, Expiration time or Audience) are empty in the given JSON Web Token.");
+            handleClientException("Mandatory fields(Issuer, Subject, Expiration time or Audience) are empty in the " +
+                    "given JSON Web Token.");
         }
         try {
             identityProvider = IdentityProviderManager.getInstance().getIdPByMetadataProperty(
@@ -333,13 +334,13 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     //check whether this jwt was issued by the resident identity provider
                     identityProvider = getResidentIDPForIssuer(tenantDomain, jwtIssuer);
                     if (identityProvider == null) {
-                        handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
+                        handleClientException("No registered identity provider found for the JWT with issuer name : " + jwtIssuer);
                     }
                 }
 
                 tokenEndPointAlias = getTokenEndpointAlias(identityProvider);
             } else {
-                handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
+                handleClientException("No registered identity provider found for the JWT with issuer name : " + jwtIssuer);
             }
             if (signedJWT != null) {
                 signatureValid = validateSignature(signedJWT, identityProvider);
@@ -348,7 +349,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                         log.debug("Signature/MAC validated successfully.");
                     }
                 } else {
-                    handleException("Signature or Message Authentication invalid.");
+                    handleClientException("Signature or Message Authentication invalid.");
                 }
             }
             setAuthorizedUser(tokReqMsgCtx, identityProvider, subject);
@@ -361,7 +362,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             tokReqMsgCtx.setScope(tokReqMsgCtx.getOauth2AccessTokenReqDTO().getScope());
 
             if (StringUtils.isEmpty(tokenEndPointAlias)) {
-                handleException("Token Endpoint alias of the local Identity Provider has not been " +
+                handleClientException("Token Endpoint alias of the local Identity Provider has not been " +
                         "configured for " + identityProvider.getIdentityProviderName());
             }
             for (String aud : audience) {
@@ -374,7 +375,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 }
             }
             if (!audienceFound) {
-                handleException("None of the audience values matched the tokenEndpoint Alias " + tokenEndPointAlias);
+                handleClientException("None of the audience values matched the tokenEndpoint Alias " + tokenEndPointAlias);
             }
             boolean checkedExpirationTime = checkExpirationTime(expirationTime, currentTimeInMillis,
                     timeStampSkewMillis);
@@ -440,7 +441,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             } else {
                 boolean customClaimsValidated = validateCustomClaims(claimsSet.getClaims());
                 if (!customClaimsValidated) {
-                    handleException("Custom Claims in the JWT were invalid");
+                    handleClientException("Custom Claims in the JWT were invalid");
                 }
             }
             if (log.isDebugEnabled()) {
@@ -688,10 +689,13 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
         long expirationTimeInMillis = expirationTime.getTime();
         if ((currentTimeInMillis + timeStampSkewMillis) > expirationTimeInMillis) {
-            handleException("JSON Web Token is expired." +
-                    ", Expiration Time(ms) : " + expirationTimeInMillis +
-                    ", TimeStamp Skew : " + timeStampSkewMillis +
-                    ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            if (log.isDebugEnabled()) {
+                log.debug("JSON Web Token is expired." +
+                        ", Expiration Time(ms) : " + expirationTimeInMillis +
+                        ", TimeStamp Skew : " + timeStampSkewMillis +
+                        ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            }
+            handleClientException("JSON Web Token is expired.");
         }
         return true;
     }
@@ -709,10 +713,13 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
         long notBeforeTimeMillis = notBeforeTime.getTime();
         if (currentTimeInMillis + timeStampSkewMillis < notBeforeTimeMillis) {
-            handleException("JSON Web Token is used before Not_Before_Time." +
-                    ", Not Before Time(ms) : " + notBeforeTimeMillis +
-                    ", TimeStamp Skew : " + timeStampSkewMillis +
-                    ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            if (log.isDebugEnabled()) {
+                log.debug("JSON Web Token is used before Not_Before_Time." +
+                        ", Not Before Time(ms) : " + notBeforeTimeMillis +
+                        ", TimeStamp Skew : " + timeStampSkewMillis +
+                        ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            }
+            handleClientException("JSON Web Token is used before Not_Before_Time.");
         }
         return true;
     }
@@ -733,11 +740,14 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         long rejectBeforeMillis = 1000L * 60 * validityPeriod;
         if (currentTimeInMillis + timeStampSkewMillis - issuedAtTimeMillis >
                 rejectBeforeMillis) {
-            handleException("JSON Web Token is issued before the allowed time." +
-                    ", Issued At Time(ms) : " + issuedAtTimeMillis +
-                    ", Reject before limit(ms) : " + rejectBeforeMillis +
-                    ", TimeStamp Skew : " + timeStampSkewMillis +
-                    ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            if (log.isDebugEnabled()) {
+                log.debug("JSON Web Token is issued before the allowed time." +
+                        ", Issued At Time(ms) : " + issuedAtTimeMillis +
+                        ", Reject before limit(ms) : " + rejectBeforeMillis +
+                        ", TimeStamp Skew : " + timeStampSkewMillis +
+                        ", Current Time : " + currentTimeInMillis + ". JWT Rejected and validation terminated");
+            }
+            handleClientException("JSON Web Token is issued before the allowed time.");
         }
         return true;
     }
@@ -770,7 +780,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     log.debug("jti of the JWT has been validated successfully and cache updated");
                 }
             } else {
-                handleException("JWT Token \n" + signedJWT.getHeader().toJSONObject().toString() + "\n"
+                handleClientException("JWT Token \n" + signedJWT.getHeader().toJSONObject().toString() + "\n"
                         + signedJWT.getPayload().toJSONObject().toString() + "\n" +
                         "Has been replayed before the allowed expiry time : "
                         + cachedJWT.getJWTClaimsSet().getExpirationTime());
@@ -844,7 +854,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             JWSHeader header = signedJWT.getHeader();
             X509Certificate x509Certificate = resolveSignerCertificate(header, idp);
             if (x509Certificate == null) {
-                handleException(
+                handleClientException(
                         "Unable to locate certificate for Identity Provider " + idp.getDisplayName() + "; JWT " +
                                 header.toString());
             }
@@ -853,7 +863,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
             String alg = signedJWT.getHeader().getAlgorithm().getName();
             if (StringUtils.isEmpty(alg)) {
-                handleException("Algorithm must not be null.");
+                handleClientException("Algorithm must not be null.");
             } else {
                 if (log.isDebugEnabled()) {
                     log.debug("Signature Algorithm found in the JWT Header: " + alg);
@@ -864,7 +874,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     if (publicKey instanceof RSAPublicKey) {
                         verifier = new RSASSAVerifier((RSAPublicKey) publicKey);
                     } else {
-                        handleException("Public key is not an RSA public key.");
+                        handleClientException("Public key is not an RSA public key.");
                     }
                 } else {
                     if (log.isDebugEnabled()) {
@@ -872,7 +882,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     }
                 }
                 if (verifier == null) {
-                    handleException("Could not create a signature verifier for algorithm type: " + alg);
+                    handleClientException("Could not create a signature verifier for algorithm type: " + alg);
                 }
             }
 
@@ -956,6 +966,11 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private void handleException(String errorMessage) throws IdentityOAuth2Exception {
 
         log.error(errorMessage);
+        throw new IdentityOAuth2Exception(errorMessage);
+    }
+
+    private void handleClientException(String errorMessage) throws IdentityOAuth2Exception {
+
         throw new IdentityOAuth2Exception(errorMessage);
     }
 
