@@ -22,6 +22,7 @@ import org.mockito.Mockito;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.testng.Assert;
 import org.testng.IObjectFactory;
@@ -37,6 +38,7 @@ import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import org.wso2.carbon.identity.oauth2.token.OauthTokenIssuer;
 import org.wso2.carbon.identity.oauth2.util.ClaimsUtil;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -47,6 +49,7 @@ import static org.powermock.api.mockito.PowerMockito.when;
  * This is a test class for {@link JWTBearerGrantHandler}.
  */
 @PrepareForTest({ ClaimsUtil.class, OAuthServerConfiguration.class })
+@PowerMockIgnore("org.mockito.*")
 public class JWTBearerGrantHandlerTest {
 
     @ObjectFactory
@@ -77,7 +80,7 @@ public class JWTBearerGrantHandlerTest {
     @Test(description = "This method tests whether handling custom claims is happening as expected", dataProvider =
             "customClaimDataProvider")
     public void testHandleCustomClaims(Map<String, Object> customClaims) throws IdentityException,
-            IdentityApplicationManagementException {
+            IdentityApplicationManagementException, IllegalAccessException, NoSuchFieldException {
 
         PowerMockito.mockStatic(ClaimsUtil.class);
         when(ClaimsUtil.handleClaimMapping(Mockito.any(IdentityProvider.class), Mockito.anyMap(), Mockito.anyString(),
@@ -101,6 +104,9 @@ public class JWTBearerGrantHandlerTest {
         Mockito.doReturn(user).when(oAuthTokenReqMessageContext).getAuthorizedUser();
         Mockito.doCallRealMethod().when(oAuthTokenReqMessageContext)
                 .setAuthorizedUser(Mockito.any(AuthenticatedUser.class));
+        Field privateField = JWTBearerGrantHandler.class.getDeclaredField("tenantDomain");
+        privateField.setAccessible(true);
+        privateField.set(jwtBearerGrantHandler, "carbon.super");
 
         jwtBearerGrantHandler.handleCustomClaims(oAuthTokenReqMessageContext, customClaims, identityProvider);
 
