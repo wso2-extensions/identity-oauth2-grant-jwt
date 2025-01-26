@@ -232,6 +232,12 @@
                 <version>${org.powermock.version}</version>
                 <scope>test</scope>
             </dependency>
+            <dependency>
+                <groupId>org.wso2.carbon.identity.inbound.auth.oauth2</groupId>
+                <artifactId>org.wso2.carbon.identity.oauth.rar</artifactId>
+                <version>${carbon.identity.oauth.version}</version>
+                <scope>Test</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -361,8 +367,8 @@
         </snapshotRepository>
     </distributionManagement>
     <properties>
-        <carbon.identity.framework.version>5.20.66</carbon.identity.framework.version>
-        <carbon.identity.oauth.version>6.4.80</carbon.identity.oauth.version>
+        <carbon.identity.framework.version>7.7.140</carbon.identity.framework.version>
+        <carbon.identity.oauth.version>7.0.226</carbon.identity.oauth.version>
         <carbon.kernel.version>4.6.0</carbon.kernel.version>
         <org.apache.oltu.oauth2.client.version>0.31</org.apache.oltu.oauth2.client.version>
         <org.apache.oltu.oauth2.common.version>1.0.1</org.apache.oltu.oauth2.common.version>

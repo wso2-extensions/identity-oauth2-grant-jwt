@@ -81,7 +81,7 @@ public class JWTBearerGrantHandlerTest {
 
         PowerMockito.mockStatic(ClaimsUtil.class);
         when(ClaimsUtil.handleClaimMapping(Mockito.any(IdentityProvider.class), Mockito.anyMap(), Mockito.anyString(),
-                Mockito.any(OAuthTokenReqMessageContext.class))).thenAnswer(new Answer<Map>() {
+                Mockito.any(OAuthTokenReqMessageContext.class), Mockito.anyBoolean())).thenAnswer(new Answer<Map>() {
             @Override public Map answer(InvocationOnMock invocationOnMock) {
                 return (Map) invocationOnMock.getArguments()[1];
             }

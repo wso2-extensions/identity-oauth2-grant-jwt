@@ -504,7 +504,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         Map<String, String> customClaimMap = getCustomClaims(customClaims);
         Map<String, String> mappedClaims;
         try {
-            mappedClaims = ClaimsUtil.handleClaimMapping(identityProvider, customClaimMap, tenantDomain, tokReqMsgCtx);
+            mappedClaims = ClaimsUtil.handleClaimMapping(identityProvider, customClaimMap, tenantDomain, tokReqMsgCtx,
+                    true);
         } catch (IdentityApplicationManagementException | IdentityException e) {
             throw new IdentityOAuth2Exception(
                     "Error while handling custom claim mapping for the tenant domain, " + tenantDomain, e);
