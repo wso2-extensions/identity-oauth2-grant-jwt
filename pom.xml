@@ -232,6 +232,12 @@
                 <version>${org.powermock.version}</version>
                 <scope>test</scope>
             </dependency>
+            <dependency>
+                <groupId>org.wso2.carbon.identity.inbound.auth.oauth2</groupId>
+                <artifactId>org.wso2.carbon.identity.oauth.rar</artifactId>
+                <version>${carbon.identity.oauth.version}</version>
+                <scope>Test</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
