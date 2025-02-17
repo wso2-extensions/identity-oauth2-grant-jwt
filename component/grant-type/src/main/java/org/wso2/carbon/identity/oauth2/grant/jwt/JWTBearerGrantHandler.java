@@ -328,6 +328,9 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 identityProvider = IdentityProviderManager.getInstance().getIdPByName(jwtIssuer, tenantDomain);
             }
             if (identityProvider != null) {
+                if (!identityProvider.isEnable()) {
+                    handleException("No Active IDP found for the JWT with issuer name : " + jwtIssuer);
+                }
                 // if no IDPs were found for a given name, the IdentityProviderManager returns a dummy IDP with the
                 // name "default". We need to handle this case.
                 if (StringUtils.equalsIgnoreCase(identityProvider.getIdentityProviderName(), DEFAULT_IDP_NAME)) {
