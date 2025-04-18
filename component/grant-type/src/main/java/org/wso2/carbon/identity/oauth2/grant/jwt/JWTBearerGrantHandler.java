@@ -1009,7 +1009,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private boolean isEncryptedJWTSigned(String payload) {
 
         if (StringUtils.isNotEmpty(payload)) {
-            String[] parts = payload.split(".");
+            String[] parts = payload.split("\\.");
             if (parts.length == 3 && StringUtils.isNotEmpty(parts[2])) {
                 return true;
             }
