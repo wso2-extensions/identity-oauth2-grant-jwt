@@ -927,7 +927,20 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     protected X509Certificate resolveSignerCertificate(JWSHeader header,
                                                        IdentityProvider idp) throws IdentityOAuth2Exception {
 
-        return OAuth2Util.resolverSignerCertificate(idp);
+        X509Certificate x509Certificate = null;
+        try {
+            if (StringUtils.equals(IdentityApplicationConstants.RESIDENT_IDP_RESERVED_NAME,
+                    idp.getIdentityProviderName())) {
+                x509Certificate = (X509Certificate) OAuth2Util.getCertificate(tenantDomain);
+            } else {
+                x509Certificate =
+                        (X509Certificate) IdentityApplicationManagementUtil.decodeCertificate(idp.getCertificate());
+            }
+        } catch (CertificateException e) {
+            handleException("Error occurred while decoding public certificate of Identity Provider "
+                    + idp.getIdentityProviderName() + " for tenant domain " + tenantDomain);
+        }
+        return x509Certificate;
     }
 
     /**
