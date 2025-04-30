@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2022, WSO2 LLC. (http://www.wso2.com).
+ * Copyright (c) 2016-2025, WSO2 LLC. (http://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -31,7 +31,6 @@ import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.wso2.carbon.core.util.KeyStoreManager;
 import net.minidev.json.JSONArray;
 
 import java.security.cert.CertificateExpiredException;
@@ -49,7 +48,6 @@ import org.wso2.carbon.identity.application.common.model.Property;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationManagementUtil;
 import org.wso2.carbon.identity.base.IdentityException;
-import org.wso2.carbon.identity.core.util.IdentityTenantUtil;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
@@ -67,7 +65,6 @@ import org.wso2.carbon.idp.mgt.IdentityProviderManagementException;
 import org.wso2.carbon.idp.mgt.IdentityProviderManager;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
-import java.security.Key;
 import java.security.PublicKey;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
@@ -78,7 +75,6 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.DEFAULT_IAT_VALIDITY_PERIOD;
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_ENABLE_IAT_VALIDATION;
@@ -99,7 +95,6 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             "Error while getting Resident Identity Provider of '%s' tenant.";
     private static final String ENFORCE_CERTIFICATE_VALIDITY
             = "JWTValidatorConfigs.EnforceCertificateExpiryTimeValidity";
-    private static Map<Integer, Key> privateKeys = new ConcurrentHashMap<>();
     private String[] registeredClaimNames = new String[]{"iss", "sub", "aud", "exp", "nbf", "iat", "jti"};
 
     private String tenantDomain;
@@ -248,7 +243,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             }
         } else {
             // The assertion is encrypted.
-            RSAPrivateKey rsaPrivateKey = getPrivateKey(tenantDomain);
+            RSAPrivateKey rsaPrivateKey = (RSAPrivateKey) OAuth2Util.getPrivateKey(tenantDomain);
             RSADecrypter decrypter = new RSADecrypter(rsaPrivateKey);
             try {
                 encryptedJWT.decrypt(decrypter);
@@ -934,8 +929,13 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
         X509Certificate x509Certificate = null;
         try {
-            x509Certificate = (X509Certificate) IdentityApplicationManagementUtil
-                    .decodeCertificate(idp.getCertificate());
+            if (StringUtils.equals(IdentityApplicationConstants.RESIDENT_IDP_RESERVED_NAME,
+                    idp.getIdentityProviderName())) {
+                x509Certificate = (X509Certificate) OAuth2Util.getCertificate(tenantDomain);
+            } else {
+                x509Certificate =
+                        (X509Certificate) IdentityApplicationManagementUtil.decodeCertificate(idp.getCertificate());
+            }
         } catch (CertificateException e) {
             handleException("Error occurred while decoding public certificate of Identity Provider "
                     + idp.getIdentityProviderName() + " for tenant domain " + tenantDomain);
@@ -1006,50 +1006,10 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         }
     }
 
-    private static RSAPrivateKey getPrivateKey(String tenantDomain) throws IdentityOAuth2Exception {
-
-        Key privateKey;
-        int tenantId = OAuth2Util.getTenantId(tenantDomain);
-        if (!(privateKeys.containsKey(tenantId))) {
-
-            try {
-                IdentityTenantUtil.initializeRegistry(tenantId, tenantDomain);
-            } catch (IdentityException e) {
-                throw new IdentityOAuth2Exception("Error occurred while loading registry for tenant " + tenantDomain,
-                        e);
-            }
-            // get tenant's key store manager
-            KeyStoreManager tenantKSM = KeyStoreManager.getInstance(tenantId);
-
-            if (!MultitenantConstants.SUPER_TENANT_DOMAIN_NAME.equals(tenantDomain)) {
-                // derive key store name
-                String ksName = tenantDomain.trim().replace(".", "-");
-                String jksName = ksName + ".jks";
-                // obtain private key
-                privateKey = tenantKSM.getPrivateKey(jksName, tenantDomain);
-
-            } else {
-                try {
-                    privateKey = tenantKSM.getDefaultPrivateKey();
-                } catch (Exception e) {
-                    //Intentionally catch Exception as an Exception is thrown from the above layer.
-                    throw new IdentityOAuth2Exception("Error while obtaining private key for super tenant", e);
-                }
-            }
-            //privateKey will not be null always
-            privateKeys.put(tenantId, privateKey);
-        } else {
-            //privateKey will not be null because containsKey() true says given key is exist and ConcurrentHashMap
-            // does not allow to store null values
-            privateKey = privateKeys.get(tenantId);
-        }
-        return (RSAPrivateKey) privateKey;
-    }
-
     private boolean isEncryptedJWTSigned(String payload) {
 
         if (StringUtils.isNotEmpty(payload)) {
-            String[] parts = payload.split(".");
+            String[] parts = payload.split("\\.");
             if (parts.length == 3 && StringUtils.isNotEmpty(parts[2])) {
                 return true;
             }
