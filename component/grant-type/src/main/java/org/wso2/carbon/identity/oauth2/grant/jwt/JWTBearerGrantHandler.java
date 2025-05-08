@@ -484,6 +484,15 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         }
         authenticatedUser.setFederatedUser(true);
         authenticatedUser.setFederatedIdPName(identityProvider.getIdentityProviderName());
+        if ("LOCAL".equals(identityProvider.getIdentityProviderName())) {
+            /*If here, the identity provider is Resident IDP and the token requested to be exchanged belongs to a
+            local user. Because, if an idp matching to the issuer of the id token is configured, we won't come to this
+            point. If an idp is not configured with the issuer of the id token, the idp would be resolved as LOCAL.
+            Then the signature validation will fail. Due to these reasons, if the validation is passing, that means it
+            is a local user. Hence, construct the authenticatedUser object as a local user.*/
+            authenticatedUser = OAuth2Util.getUserFromUserName(authenticatedSubjectIdentifier);
+            authenticatedUser.setAuthenticatedSubjectIdentifier(authenticatedSubjectIdentifier);
+        }
         tokenReqMsgCtx.setAuthorizedUser(authenticatedUser);
     }
 
