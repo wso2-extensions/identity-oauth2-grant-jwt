@@ -88,7 +88,10 @@ import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_REGIST
 public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
     private static final String OAUTH_SPLIT_AUTHZ_USER_3_WAY = "OAuth.SplitAuthzUser3Way";
+    private static final String ENABLE_TOKEN_EXCHANGE_FOR_LOCAL_USERS_WITH_RESIDENT_IDP
+            = "OAuth.JWTGrant.EnableTokenExchangeForLocalUsersWithResidentIdP";
     private static final String DEFAULT_IDP_NAME = "default";
+    private static final String RESIDENT_IDP_NAME = "LOCAL";
     private static final Log log = LogFactory.getLog(JWTBearerGrantHandler.class);
     private static final String OIDC_IDP_ENTITY_ID = "IdPEntityId";
     private static final String ERROR_GET_RESIDENT_IDP =
@@ -474,7 +477,14 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                                      String authenticatedSubjectIdentifier) {
 
         AuthenticatedUser authenticatedUser;
-        if (Boolean.parseBoolean(IdentityUtil.getProperty(OAUTH_SPLIT_AUTHZ_USER_3_WAY))) {
+        if (Boolean.parseBoolean(IdentityUtil.getProperty(ENABLE_TOKEN_EXCHANGE_FOR_LOCAL_USERS_WITH_RESIDENT_IDP)) &&
+                RESIDENT_IDP_NAME.equals(identityProvider.getIdentityProviderName())) {
+            /*To determine the user store domain of the local user, it should be available in the subject identifier.
+            Hence, enable "Use user store domain in local subject identifier" config in the service provider which
+            generates the initial token.*/
+            authenticatedUser = OAuth2Util.getUserFromUserName(authenticatedSubjectIdentifier);
+            authenticatedUser.setAuthenticatedSubjectIdentifier(authenticatedSubjectIdentifier);
+        } else if (Boolean.parseBoolean(IdentityUtil.getProperty(OAUTH_SPLIT_AUTHZ_USER_3_WAY))) {
             authenticatedUser = OAuth2Util.getUserFromUserName(authenticatedSubjectIdentifier);
             authenticatedUser.setAuthenticatedSubjectIdentifier(authenticatedSubjectIdentifier);
         } else {
