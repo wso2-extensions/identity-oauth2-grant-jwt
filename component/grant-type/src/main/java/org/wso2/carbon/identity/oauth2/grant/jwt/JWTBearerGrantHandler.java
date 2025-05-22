@@ -479,9 +479,11 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         AuthenticatedUser authenticatedUser;
         if (Boolean.parseBoolean(IdentityUtil.getProperty(ENABLE_TOKEN_EXCHANGE_FOR_LOCAL_USERS_WITH_RESIDENT_IDP)) &&
                 RESIDENT_IDP_NAME.equals(identityProvider.getIdentityProviderName())) {
-            /*To determine the user store domain of the local user, it should be available in the subject identifier.
+            /*
+            To determine the user store domain of the local user, it should be available in the subject identifier.
             Hence, enable "Use user store domain in local subject identifier" config in the service provider which
-            generates the initial token.*/
+            generates the initial token.
+            */
             authenticatedUser = OAuth2Util.getUserFromUserName(authenticatedSubjectIdentifier);
             authenticatedUser.setAuthenticatedSubjectIdentifier(authenticatedSubjectIdentifier);
         } else if (Boolean.parseBoolean(IdentityUtil.getProperty(OAUTH_SPLIT_AUTHZ_USER_3_WAY))) {
