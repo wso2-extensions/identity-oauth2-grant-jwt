@@ -383,12 +383,12 @@
         <org.wso2.securevault.version>1.0.0-wso2v2</org.wso2.securevault.version>
         <commons-lang.wso2.version>2.6.0.wso2v1</commons-lang.wso2.version>
         <encoder.wso2.version>1.2.0.wso2v1</encoder.wso2.version>
-        <nimbusds.version>7.3.0.wso2v1</nimbusds.version>
+        <nimbusds.version>10.3.0.wso2v1</nimbusds.version>
         <oltu.version>1.0.0.wso2v3</oltu.version>
         <carbon.identity.package.import.version.range>[5.0.0, 8.0.0)</carbon.identity.package.import.version.range>
         <carbon.identity.oauth.package.import.version.range>[6.0.0, 8.0.0)</carbon.identity.oauth.package.import.version.range>
         <carbon.kernel.package.import.version.range>[4.4.0, 5.0.0)</carbon.kernel.package.import.version.range>
-        <nimbusds.osgi.version.range>[7.3.0,8.0.0)</nimbusds.osgi.version.range>
+        <nimbusds.osgi.version.range>[10.3.0,11.0.0)</nimbusds.osgi.version.range>
         <commons-logging.osgi.version.range>[1.2,2.0)</commons-logging.osgi.version.range>
         <commons-lang.wso2.osgi.version.range>[2.6.0,3.0.0)</commons-lang.wso2.osgi.version.range>
         <net.minidev.json.imp.pkg.version.range>[2.3.0, 3.0.0)</net.minidev.json.imp.pkg.version.range>
