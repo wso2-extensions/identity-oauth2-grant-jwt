@@ -41,7 +41,13 @@ import org.wso2.carbon.CarbonConstants;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
-import org.wso2.carbon.identity.application.common.model.*;
+import org.wso2.carbon.identity.application.common.model.ClaimMapping;
+import org.wso2.carbon.identity.application.common.model.FederatedAuthenticatorConfig;
+import org.wso2.carbon.identity.application.common.model.IdentityProvider;
+import org.wso2.carbon.identity.application.common.model.IdentityProviderProperty;
+import org.wso2.carbon.identity.application.common.model.Property;
+import org.wso2.carbon.identity.application.common.model.ServiceProvider;
+import org.wso2.carbon.identity.application.common.model.ServiceProviderProperty;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationManagementUtil;
 import org.wso2.carbon.identity.base.IdentityException;
@@ -78,6 +84,7 @@ import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_ENABLE
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_ENABLE_JWT_CACHE;
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_IAT_VALIDITY_PERIOD;
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_REGISTERED_JWT;
+import static org.wso2.carbon.user.core.constants.UserCoreClaimConstants.USER_ID_CLAIM_URI;
 
 /**
  * Class to handle JSON Web Token(JWT) grant type
@@ -90,7 +97,6 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private static final String DEFAULT_IDP_NAME = "default";
     private static final String RESIDENT_IDP_NAME = "LOCAL";
     private static final String TENANT_DOMAIN_SEPARATOR = "@";
-    private static final String USER_ID_CLAIM = "http://wso2.org/claims/userid";
     private static final Log log = LogFactory.getLog(JWTBearerGrantHandler.class);
     private static final String OIDC_IDP_ENTITY_ID = "IdPEntityId";
     private static final String ERROR_GET_RESIDENT_IDP =
@@ -302,7 +308,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         Date notBeforeTime = claimsSet.getNotBeforeTime();
         Date issuedAtTime = claimsSet.getIssueTime();
         String jti = claimsSet.getJWTID();
-        String azp = null;
+        String azp = StringUtils.EMPTY;
         if (claimsSet.getClaim("azp") != null) {
             azp = claimsSet.getClaim("azp").toString();
         }
@@ -1046,14 +1052,14 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
     private String resolveLocalUsername(String azp, String subject, IdentityProvider idp)
             throws IdentityOAuth2Exception {
 
-        if (!isTokenExchangeRequestForLocalUsersWithResidentIdP(idp) || azp == null) {
+        if (!isTokenExchangeRequestForLocalUsersWithResidentIdP(idp) || StringUtils.isEmpty(azp)) {
             return subject;
         }
 
         /*
          To determine the user store domain of the local user when userName is configured as the sub of the token,
-         the user store domain should be available in the subject identifier.nHence, enable "Use user store domain in
-         local subject identifier" config in the service provider which generates the initial token.
+         the user store domain should be available in the subject identifier. Hence, enable "Use user store domain in
+         local subject identifier" under Subject configuration of an Application which generates the initial token.
         */
         ServiceProvider serviceProvider = OAuth2Util.getServiceProvider(azp, tenantDomain);
         String subjectClaimUri = serviceProvider.getLocalAndOutBoundAuthenticationConfig().getSubjectClaimUri();
@@ -1062,7 +1068,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         try {
             // If user id is used as the subject, resolve full qualified username from the user Id.
             if ((subjectClaimUri == null && isUseUserIdForDefaultSubject(serviceProvider)) ||
-                    USER_ID_CLAIM.equals(subjectClaimUri)) {
+                    USER_ID_CLAIM_URI.equals(subjectClaimUri)) {
 
                 fullQualifiedUserName = StringUtils.EMPTY;
                 String sanitizedUserId = subject;
