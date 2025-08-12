@@ -37,6 +37,7 @@ import java.security.cert.CertificateExpiredException;
 import java.security.cert.CertificateNotYetValidException;
 import java.util.Collection;
 
+import org.wso2.carbon.CarbonConstants;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
@@ -45,6 +46,8 @@ import org.wso2.carbon.identity.application.common.model.FederatedAuthenticatorC
 import org.wso2.carbon.identity.application.common.model.IdentityProvider;
 import org.wso2.carbon.identity.application.common.model.IdentityProviderProperty;
 import org.wso2.carbon.identity.application.common.model.Property;
+import org.wso2.carbon.identity.application.common.model.ServiceProvider;
+import org.wso2.carbon.identity.application.common.model.ServiceProviderProperty;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationManagementUtil;
 import org.wso2.carbon.identity.base.IdentityException;
@@ -81,6 +84,7 @@ import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_ENABLE
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_ENABLE_JWT_CACHE;
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_IAT_VALIDITY_PERIOD;
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_REGISTERED_JWT;
+import static org.wso2.carbon.user.core.constants.UserCoreClaimConstants.USER_ID_CLAIM_URI;
 
 /**
  * Class to handle JSON Web Token(JWT) grant type
@@ -88,7 +92,11 @@ import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_REGIST
 public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
     private static final String OAUTH_SPLIT_AUTHZ_USER_3_WAY = "OAuth.SplitAuthzUser3Way";
+    private static final String ENABLE_TOKEN_EXCHANGE_FOR_LOCAL_USERS_WITH_RESIDENT_IDP
+            = "OAuth.JWTGrant.EnableTokenExchangeForLocalUsersWithResidentIdP";
     private static final String DEFAULT_IDP_NAME = "default";
+    private static final String RESIDENT_IDP_NAME = "LOCAL";
+    private static final String TENANT_DOMAIN_SEPARATOR = "@";
     private static final Log log = LogFactory.getLog(JWTBearerGrantHandler.class);
     private static final String OIDC_IDP_ENTITY_ID = "IdPEntityId";
     private static final String ERROR_GET_RESIDENT_IDP =
@@ -300,6 +308,10 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         Date notBeforeTime = claimsSet.getNotBeforeTime();
         Date issuedAtTime = claimsSet.getIssueTime();
         String jti = claimsSet.getJWTID();
+        String azp = StringUtils.EMPTY;
+        if (claimsSet.getClaim("azp") != null) {
+            azp = claimsSet.getClaim("azp").toString();
+        }
         Map<String, Object> customClaims = claimsSet.getClaims();
         boolean signatureValid;
         boolean audienceFound = false;
@@ -350,7 +362,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     handleClientException("Signature or Message Authentication invalid.");
                 }
             }
-            setAuthorizedUser(tokReqMsgCtx, identityProvider, subject);
+            setAuthorizedUser(tokReqMsgCtx, identityProvider, subject,
+                    resolveLocalUsername(azp, subject, identityProvider));
 
             if (log.isDebugEnabled()) {
                 log.debug("Subject(sub) found in JWT: " + subject);
@@ -472,17 +485,30 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
      */
     protected void setAuthorizedUser(OAuthTokenReqMessageContext tokenReqMsgCtx, IdentityProvider identityProvider,
                                      String authenticatedSubjectIdentifier) {
+        setAuthorizedUser(tokenReqMsgCtx, identityProvider, authenticatedSubjectIdentifier, null);
+    }
+
+    private void setAuthorizedUser(OAuthTokenReqMessageContext tokenReqMsgCtx, IdentityProvider identityProvider,
+                                   String authenticatedSubjectIdentifier, String localUserName) {
 
         AuthenticatedUser authenticatedUser;
-        if (Boolean.parseBoolean(IdentityUtil.getProperty(OAUTH_SPLIT_AUTHZ_USER_3_WAY))) {
+        /*
+         If the 'EnableTokenExchangeForLocalUsersWithResidentIdP' config is enabled, and request is for resident IDP
+         with a non-null local username, the user will be treated as a local user.
+        */
+        if (isTokenExchangeRequestForLocalUsersWithResidentIdP(identityProvider) && localUserName != null) {
+            authenticatedUser = OAuth2Util.getUserFromUserName(localUserName);
+            authenticatedUser.setAuthenticatedSubjectIdentifier(authenticatedSubjectIdentifier);
+        } else if (Boolean.parseBoolean(IdentityUtil.getProperty(OAUTH_SPLIT_AUTHZ_USER_3_WAY))) {
             authenticatedUser = OAuth2Util.getUserFromUserName(authenticatedSubjectIdentifier);
             authenticatedUser.setAuthenticatedSubjectIdentifier(authenticatedSubjectIdentifier);
+            authenticatedUser.setFederatedUser(true);
         } else {
             authenticatedUser = AuthenticatedUser
                     .createFederateAuthenticatedUserFromSubjectIdentifier(authenticatedSubjectIdentifier);
             authenticatedUser.setUserName(authenticatedSubjectIdentifier);
+            authenticatedUser.setFederatedUser(true);
         }
-        authenticatedUser.setFederatedUser(true);
         authenticatedUser.setFederatedIdPName(identityProvider.getIdentityProviderName());
         tokenReqMsgCtx.setAuthorizedUser(authenticatedUser);
     }
@@ -1015,5 +1041,77 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             }
         }
         return false;
+    }
+
+    private boolean isTokenExchangeRequestForLocalUsersWithResidentIdP(IdentityProvider identityProvider) {
+
+        return Boolean.parseBoolean(IdentityUtil.getProperty(ENABLE_TOKEN_EXCHANGE_FOR_LOCAL_USERS_WITH_RESIDENT_IDP))
+                && RESIDENT_IDP_NAME.equals(identityProvider.getIdentityProviderName());
+    }
+
+    private String resolveLocalUsername(String azp, String subject, IdentityProvider idp)
+            throws IdentityOAuth2Exception {
+
+        if (!isTokenExchangeRequestForLocalUsersWithResidentIdP(idp) || StringUtils.isEmpty(azp)) {
+            return subject;
+        }
+
+        /*
+         To determine the user store domain of the local user when userName is configured as the sub of the token,
+         the user store domain should be available in the subject identifier. Hence, enable "Use user store domain in
+         local subject identifier" under Subject configuration of an Application which generates the initial token.
+        */
+        ServiceProvider serviceProvider = OAuth2Util.getServiceProvider(azp, tenantDomain);
+        String subjectClaimUri = serviceProvider.getLocalAndOutBoundAuthenticationConfig().getSubjectClaimUri();
+        String fullQualifiedUserName = subject;
+
+        try {
+            // If user id is used as the subject, resolve full qualified username from the user Id.
+            if ((subjectClaimUri == null && isUseUserIdForDefaultSubject(serviceProvider)) ||
+                    USER_ID_CLAIM_URI.equals(subjectClaimUri)) {
+
+                fullQualifiedUserName = StringUtils.EMPTY;
+                String sanitizedUserId = subject;
+                String userStoreDomain = OAuth2Util.getUserStoreDomainFromUserId(subject);
+                String userTenantDomain = tenantDomain;
+                if (StringUtils.isNotBlank(userStoreDomain)) {
+                    fullQualifiedUserName = userStoreDomain + CarbonConstants.DOMAIN_SEPARATOR;
+                    sanitizedUserId = subject.split(CarbonConstants.DOMAIN_SEPARATOR)[1];
+                }
+                if (subject.contains(TENANT_DOMAIN_SEPARATOR)) {
+                    String[] splitByTenantDomain = sanitizedUserId.split(TENANT_DOMAIN_SEPARATOR);
+                    sanitizedUserId = splitByTenantDomain[0];
+                    userTenantDomain = splitByTenantDomain[1];
+                }
+                String usernameFromUserId = OAuth2Util.resolveUsernameFromUserId(userTenantDomain, sanitizedUserId);
+                if (StringUtils.isEmpty(usernameFromUserId)) {
+                    return null;
+                }
+                fullQualifiedUserName += usernameFromUserId + TENANT_DOMAIN_SEPARATOR + userTenantDomain;
+            }
+
+            // Check whether user exists by the resolved username, if not return null.
+            if (OAuth2Util.isExistingUser(fullQualifiedUserName, tenantDomain)) {
+                return fullQualifiedUserName;
+            }
+        } catch (Exception e) {
+            handleException("Error while resolving username from user ID: " + subject);
+        }
+        return null;
+    }
+
+    private boolean isUseUserIdForDefaultSubject(ServiceProvider serviceProvider) {
+
+        boolean useUserIdForDefaultSubject = false;
+        ServiceProviderProperty[] spProperties = serviceProvider.getSpProperties();
+        if (spProperties != null) {
+            for (ServiceProviderProperty prop : spProperties) {
+                if (IdentityApplicationConstants.USE_USER_ID_FOR_DEFAULT_SUBJECT.equals(prop.getName())) {
+                    useUserIdForDefaultSubject = Boolean.parseBoolean(prop.getValue());
+                    break;
+                }
+            }
+        }
+        return useUserIdForDefaultSubject;
     }
 }
