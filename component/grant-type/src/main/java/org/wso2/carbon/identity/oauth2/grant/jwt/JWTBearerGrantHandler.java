@@ -271,6 +271,8 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 if (!isEncryptedJWTSigned(payload)) {
                     try {
                         // If encrypted JWT is not signed.
+                        String payloadJson = encryptedJWT.getPayload().toString();
+                        IdentityUtil.validateJWTDepthOfJWTPayload(payloadJson);
                         claimsSet = encryptedJWT.getJWTClaimsSet();
                         if (log.isDebugEnabled()) {
                             log.debug("The encrypted JWT is not signed. Obtained the claim set of the encrypted JWT.");
@@ -644,6 +646,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
 
         JWTClaimsSet claimsSet = null;
         try {
+            IdentityUtil.validateJWTDepth(signedJWT.serialize());
             claimsSet = signedJWT.getJWTClaimsSet();
         } catch (ParseException e) {
             handleException("Error when trying to retrieve claimsSet from the JWT");
