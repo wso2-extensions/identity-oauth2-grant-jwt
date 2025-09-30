@@ -271,8 +271,10 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 if (!isEncryptedJWTSigned(payload)) {
                     try {
                         // If encrypted JWT is not signed.
-                        String payloadJson = encryptedJWT.getPayload().toString();
-                        IdentityUtil.validateJWTDepthOfJWTPayload(payloadJson);
+                        if (encryptedJWT.getPayload() != null) {
+                            String payloadJson = encryptedJWT.getPayload().toString();
+                            IdentityUtil.validateJWTDepthOfJWTPayload(payloadJson);
+                        }
                         claimsSet = encryptedJWT.getJWTClaimsSet();
                         if (log.isDebugEnabled()) {
                             log.debug("The encrypted JWT is not signed. Obtained the claim set of the encrypted JWT.");
