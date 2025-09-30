@@ -19,7 +19,7 @@
     <parent>
         <groupId>org.wso2.carbon.extension.identity.oauth2.grantType.jwt</groupId>
         <artifactId>identity-inbound-oauth2-grant-jwt</artifactId>
-        <version>2.3.9-SNAPSHOT</version>
+        <version>2.3.9</version>
         <relativePath>../../pom.xml</relativePath>
     </parent>
 
