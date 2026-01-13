@@ -41,6 +41,7 @@ import org.wso2.carbon.CarbonConstants;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
+import org.wso2.carbon.identity.application.common.model.CertificateInfo;
 import org.wso2.carbon.identity.application.common.model.ClaimMapping;
 import org.wso2.carbon.identity.application.common.model.FederatedAuthenticatorConfig;
 import org.wso2.carbon.identity.application.common.model.IdentityProvider;
@@ -878,45 +879,73 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             return jwksBasedJWTValidator.validateSignature(signedJWT.getParsedString(), jwksUri, signedJWT.getHeader
                     ().getAlgorithm().getName(), null);
         } else {
-            JWSVerifier verifier = null;
-            JWSHeader header = signedJWT.getHeader();
-            X509Certificate x509Certificate = resolveSignerCertificate(header, idp);
-            if (x509Certificate == null) {
-                handleClientException(
-                        "Unable to locate certificate for Identity Provider " + idp.getDisplayName() + "; JWT " +
-                                header.toString());
-            }
+            CertificateInfo[] certificateInfos = idp.getCertificateInfoArray();
 
-            checkValidity(x509Certificate);
-
-            String alg = signedJWT.getHeader().getAlgorithm().getName();
-            if (StringUtils.isEmpty(alg)) {
-                handleClientException("Algorithm must not be null.");
+            if (certificateInfos.length <= 1) {
+                JWSHeader header = signedJWT.getHeader();
+                X509Certificate x509Certificate = resolveSignerCertificate(header, idp);
+                return verifySignature(x509Certificate, signedJWT, idp);
             } else {
                 if (log.isDebugEnabled()) {
-                    log.debug("Signature Algorithm found in the JWT Header: " + alg);
+                    log.debug("The number of certificates has been found is: " + certificateInfos.length);
                 }
-                if (alg.startsWith("RS")) {
-                    // At this point 'x509Certificate' will never be null.
-                    PublicKey publicKey = x509Certificate.getPublicKey();
-                    if (publicKey instanceof RSAPublicKey) {
-                        verifier = new RSASSAVerifier((RSAPublicKey) publicKey);
-                    } else {
-                        handleClientException("Public key is not an RSA public key.");
+                // Iterate through each configured certificate to try signature verification.
+                for (CertificateInfo certificateInfo : certificateInfos) {
+                    X509Certificate x509Certificate = resolveSignerCertificate(idp, certificateInfo);
+
+                    // If any of the configured certificates successfully verifies the signature, the verification
+                    // is considered successful.
+                    if (verifySignature(x509Certificate, signedJWT, idp)) {
+                        return true;
                     }
+                }
+
+                // Return false if no certificate could successfully verify the JWT.
+                return false;
+            }
+        }
+    }
+
+    private boolean verifySignature(X509Certificate x509Certificate, SignedJWT signedJWT, IdentityProvider idp)
+            throws JOSEException, IdentityOAuth2Exception {
+
+        JWSVerifier verifier = null;
+        JWSHeader header = signedJWT.getHeader();
+        if (x509Certificate == null) {
+            handleException(
+                    "Unable to locate certificate for Identity Provider " + idp.getDisplayName() + "; JWT " +
+                            header.toString());
+        }
+
+        checkValidity(x509Certificate);
+
+        String alg = signedJWT.getHeader().getAlgorithm().getName();
+        if (StringUtils.isEmpty(alg)) {
+            handleException("Algorithm must not be null.");
+        } else {
+            if (log.isDebugEnabled()) {
+                log.debug("Signature Algorithm found in the JWT Header: " + alg);
+            }
+            if (alg.startsWith("RS")) {
+                // At this point 'x509Certificate' will never be null.
+                PublicKey publicKey = x509Certificate.getPublicKey();
+                if (publicKey instanceof RSAPublicKey) {
+                    verifier = new RSASSAVerifier((RSAPublicKey) publicKey);
                 } else {
-                    if (log.isDebugEnabled()) {
-                        log.debug("Signature Algorithm not supported yet : " + alg);
-                    }
+                    handleException("Public key is not an RSA public key.");
                 }
-                if (verifier == null) {
-                    handleClientException("Could not create a signature verifier for algorithm type: " + alg);
+            } else {
+                if (log.isDebugEnabled()) {
+                    log.debug("Signature Algorithm not supported yet : " + alg);
                 }
             }
-
-            // At this point 'verifier' will never be null;
-            return signedJWT.verify(verifier);
+            if (verifier == null) {
+                handleException("Could not create a signature verifier for algorithm type: " + alg);
+            }
         }
+
+        // At this point 'verifier' will never be null;
+        return signedJWT.verify(verifier);
     }
 
     /**
@@ -967,6 +996,20 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                 x509Certificate =
                         (X509Certificate) IdentityApplicationManagementUtil.decodeCertificate(idp.getCertificate());
             }
+        } catch (CertificateException e) {
+            handleException("Error occurred while decoding public certificate of Identity Provider "
+                    + idp.getIdentityProviderName() + " for tenant domain " + tenantDomain);
+        }
+        return x509Certificate;
+    }
+
+    private X509Certificate resolveSignerCertificate(IdentityProvider idp, CertificateInfo certificateInfo)
+            throws IdentityOAuth2Exception {
+
+        X509Certificate x509Certificate = null;
+        try {
+            x509Certificate = (X509Certificate) IdentityApplicationManagementUtil
+                    .decodeCertificate(certificateInfo.getCertValue());
         } catch (CertificateException e) {
             handleException("Error occurred while decoding public certificate of Identity Provider "
                     + idp.getIdentityProviderName() + " for tenant domain " + tenantDomain);
