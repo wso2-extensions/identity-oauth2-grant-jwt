@@ -215,6 +215,7 @@
                         <Bundle-Name>${project.artifactId}</Bundle-Name>
                         <Private-Package>org.wso2.carbon.identity.oauth2.grant.jwt.internal</Private-Package>
                         <Import-Package>
+                            !org.wso2.carbon.identity.oauth2.grant.jwt.*,
                             org.osgi.framework; version="${osgi.framework.imp.pkg.version.range}",
                             org.osgi.service.component; version="${osgi.service.component.imp.pkg.version.range}",
                             org.wso2.carbon.core.*; version ="${carbon.kernel.package.import.version.range}",
