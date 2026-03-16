@@ -336,7 +336,9 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                         handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
                     }
                 }
-
+                if (!identityProvider.isEnable()) {
+                    handleException("No Active IDP found for the JWT with issuer name : " + jwtIssuer);
+                }
                 tokenEndPointAlias = getTokenEndpointAlias(identityProvider);
             } else {
                 handleException("No Registered IDP found for the JWT with issuer name : " + jwtIssuer);
