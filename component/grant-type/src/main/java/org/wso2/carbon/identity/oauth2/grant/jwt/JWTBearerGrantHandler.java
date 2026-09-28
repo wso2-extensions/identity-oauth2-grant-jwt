@@ -38,7 +38,10 @@ import java.security.cert.CertificateNotYetValidException;
 import java.util.Collection;
 
 import org.wso2.carbon.CarbonConstants;
+import org.wso2.carbon.identity.application.authentication.framework.exception.FrameworkException;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
+import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkConstants;
+import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkErrorConstants;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
 import org.wso2.carbon.identity.application.common.model.CertificateInfo;
@@ -52,13 +55,21 @@ import org.wso2.carbon.identity.application.common.model.ServiceProviderProperty
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationConstants;
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationManagementUtil;
 import org.wso2.carbon.identity.base.IdentityException;
+import org.wso2.carbon.identity.core.util.IdentityCoreConstants;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
+import org.wso2.carbon.identity.handler.event.account.lock.exception.AccountLockServiceException;
+import org.wso2.carbon.identity.handler.event.account.lock.service.AccountDisableService;
+import org.wso2.carbon.identity.handler.event.account.lock.exception.AccountDisableServiceException;
+import org.wso2.carbon.identity.handler.event.account.lock.service.AccountLockService;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
+import org.wso2.carbon.identity.oauth2.IdentityOAuth2ClientException;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
+import org.wso2.carbon.identity.oauth2.IdentityOAuth2ServerException;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenRespDTO;
 import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCache;
 import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCacheEntry;
+import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.RequestParameter;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import org.wso2.carbon.identity.oauth2.token.handlers.grant.AbstractAuthorizationGrantHandler;
@@ -67,6 +78,7 @@ import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.identity.oauth2.validators.jwt.JWKSBasedJWTValidator;
 import org.wso2.carbon.idp.mgt.IdentityProviderManagementException;
 import org.wso2.carbon.idp.mgt.IdentityProviderManager;
+import org.wso2.carbon.user.core.UserCoreConstants;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
 import java.security.PublicKey;
@@ -478,6 +490,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             log.debug("Issuer(iss) of the JWT validated successfully");
         }
         handleCustomClaims(tokReqMsgCtx, customClaims, identityProvider);
+        validateUserAccountState(tokReqMsgCtx, identityProvider);
         return true;
     }
 
@@ -1161,5 +1174,99 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
             }
         }
         return useUserIdForDefaultSubject;
+    }
+
+    /**
+     * Validate user account state (locked or disabled) for local users with resident IdP.
+     *
+     * @param tokReqMsgCtx     Token request message context.
+     * @param identityProvider Identity provider.
+     * @throws IdentityOAuth2Exception If user account is locked, disabled, or an error occurs during validation.
+     */
+    private void validateUserAccountState(OAuthTokenReqMessageContext tokReqMsgCtx, IdentityProvider identityProvider)
+            throws IdentityOAuth2Exception {
+
+        if (!isTokenExchangeRequestForLocalUsersWithResidentIdP(identityProvider)) {
+            return;
+        }
+
+        AuthenticatedUser authenticatedUser = tokReqMsgCtx.getAuthorizedUser();
+        if (authenticatedUser == null || authenticatedUser.isFederatedUser()) {
+            return;
+        }
+
+        String username = authenticatedUser.getUserName();
+        String tenantDomain = authenticatedUser.getTenantDomain();
+        String userStoreDomain = authenticatedUser.getUserStoreDomain();
+
+        if (StringUtils.isBlank(username) || StringUtils.isBlank(tenantDomain)) {
+            return;
+        }
+
+        checkAccountLockStatus(username, tenantDomain, userStoreDomain);
+        checkAccountDisableStatus(username, tenantDomain, userStoreDomain);
+    }
+
+    private void checkAccountLockStatus(String username, String tenantDomain, String userStoreDomain)
+            throws IdentityOAuth2Exception {
+
+        AccountLockService accountLockService = OAuth2ServiceComponentHolder.getAccountLockService();
+
+        try {
+            boolean isLocked = accountLockService.isAccountLocked(username, tenantDomain, userStoreDomain);
+            if (isLocked) {
+                if (log.isDebugEnabled()) {
+                    log.debug(String.format("User account is locked for user: %s in tenant: %s", username, tenantDomain));
+                }
+                throw new IdentityOAuth2ClientException(UserCoreConstants.ErrorCode.USER_IS_LOCKED,
+                        String.format("Account is locked for user %s in tenant %s. Cannot login until the " +
+                                "account is unlocked.", username, tenantDomain));
+            }
+        } catch (AccountLockServiceException e) {
+            throw new IdentityOAuth2ServerException(
+                    FrameworkErrorConstants.ErrorMessages.ERROR_WHILE_CHECKING_ACCOUNT_LOCK_STATUS.getCode(),
+                    String.format(FrameworkErrorConstants.ErrorMessages.ERROR_WHILE_CHECKING_ACCOUNT_LOCK_STATUS.getMessage(),
+                            username), e);
+        }
+    }
+
+    private void checkAccountDisableStatus(String username, String tenantDomain, String userStoreDomain)
+            throws IdentityOAuth2Exception {
+
+        if (!isAccountDisablingEnabled(tenantDomain)) {
+            return;
+        }
+
+        AccountDisableService accountDisableService = OAuth2ServiceComponentHolder.getAccountDisableService();
+
+        try {
+            boolean isDisabled = accountDisableService.isAccountDisabled(username, tenantDomain, userStoreDomain);
+            if (isDisabled) {
+                if (log.isDebugEnabled()) {
+                    log.debug(String.format("User account is disabled for user: %s in tenant: %s", username, tenantDomain));
+                }
+                throw new IdentityOAuth2ClientException(IdentityCoreConstants.USER_ACCOUNT_DISABLED_ERROR_CODE,
+                        String.format("Account is disabled for user %s in tenant %s. Cannot login until the account is enabled.",
+                                username, tenantDomain));
+            }
+        } catch (AccountDisableServiceException e) {
+            throw new IdentityOAuth2ServerException(
+                    FrameworkErrorConstants.ErrorMessages.ERROR_WHILE_CHECKING_ACCOUNT_DISABLE_STATUS.getCode(),
+                    String.format(FrameworkErrorConstants.ErrorMessages.ERROR_WHILE_CHECKING_ACCOUNT_DISABLE_STATUS.getMessage(),
+                            username), e);
+        }
+    }
+
+    private boolean isAccountDisablingEnabled(String tenantDomain) throws IdentityOAuth2Exception {
+
+        try {
+            Property accountDisableConfigProperty = FrameworkUtils.getResidentIdpConfiguration(
+                    FrameworkConstants.ResidentIdpPropertyName.ACCOUNT_DISABLE_HANDLER_ENABLE_PROPERTY, tenantDomain);
+            return accountDisableConfigProperty != null && Boolean.parseBoolean(accountDisableConfigProperty.getValue());
+        } catch (FrameworkException e) {
+            throw new IdentityOAuth2ServerException(
+                    FrameworkErrorConstants.ErrorMessages.ERROR_WHILE_CHECKING_ACCOUNT_DISABLE_STATUS.getCode(),
+                    "Error while retrieving resident IDP configuration for account disable handler.", e);
+        }
     }
 }
