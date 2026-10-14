@@ -31,4 +31,10 @@ public class JWTConstants {
     public static final String PROP_ENABLE_JWT_CACHE = "OAuth.JWTGrant.EnableJWTCache";
     public static final int DEFAULT_IAT_VALIDITY_PERIOD = 30;
     public static final String PROP_REGISTERED_JWT = "OAuth.JWTGrant.RegisteredClaim";
+
+    // Aligned with the messages of the account lock and account disable handlers.
+    public static final String ACCOUNT_LOCKED_ERROR_MESSAGE = "17003 Account is locked for user %s in user store %s " +
+            "in tenant %s. Cannot login until the account is unlocked.";
+    public static final String ACCOUNT_DISABLED_ERROR_MESSAGE = "17004 Account is disabled for user: %s in user " +
+            "store: %s in tenant: %s. Cannot login until the account is enabled.";
 }
