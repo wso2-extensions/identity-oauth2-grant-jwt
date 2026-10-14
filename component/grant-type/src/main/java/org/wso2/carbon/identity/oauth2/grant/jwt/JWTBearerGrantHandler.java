@@ -38,7 +38,9 @@ import java.security.cert.CertificateNotYetValidException;
 import java.util.Collection;
 
 import org.wso2.carbon.CarbonConstants;
+import org.wso2.carbon.identity.application.authentication.framework.exception.FrameworkException;
 import org.wso2.carbon.identity.application.authentication.framework.model.AuthenticatedUser;
+import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkConstants;
 import org.wso2.carbon.identity.application.authentication.framework.util.FrameworkUtils;
 import org.wso2.carbon.identity.application.common.IdentityApplicationManagementException;
 import org.wso2.carbon.identity.application.common.model.CertificateInfo;
@@ -53,20 +55,26 @@ import org.wso2.carbon.identity.application.common.util.IdentityApplicationConst
 import org.wso2.carbon.identity.application.common.util.IdentityApplicationManagementUtil;
 import org.wso2.carbon.identity.base.IdentityException;
 import org.wso2.carbon.identity.core.util.IdentityUtil;
+import org.wso2.carbon.identity.handler.event.account.lock.exception.AccountDisableServiceException;
+import org.wso2.carbon.identity.handler.event.account.lock.exception.AccountLockServiceException;
 import org.wso2.carbon.identity.oauth.common.OAuthConstants;
 import org.wso2.carbon.identity.oauth.config.OAuthServerConfiguration;
 import org.wso2.carbon.identity.oauth2.IdentityOAuth2Exception;
 import org.wso2.carbon.identity.oauth2.dto.OAuth2AccessTokenRespDTO;
 import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCache;
 import org.wso2.carbon.identity.oauth2.grant.jwt.cache.JWTCacheEntry;
+import org.wso2.carbon.identity.oauth2.internal.OAuth2ServiceComponentHolder;
 import org.wso2.carbon.identity.oauth2.model.RequestParameter;
 import org.wso2.carbon.identity.oauth2.token.OAuthTokenReqMessageContext;
 import org.wso2.carbon.identity.oauth2.token.handlers.grant.AbstractAuthorizationGrantHandler;
 import org.wso2.carbon.identity.oauth2.util.ClaimsUtil;
 import org.wso2.carbon.identity.oauth2.util.OAuth2Util;
 import org.wso2.carbon.identity.oauth2.validators.jwt.JWKSBasedJWTValidator;
+import org.wso2.carbon.identity.user.profile.mgt.association.federation.exception.FederatedAssociationManagerException;
 import org.wso2.carbon.idp.mgt.IdentityProviderManagementException;
 import org.wso2.carbon.idp.mgt.IdentityProviderManager;
+import org.wso2.carbon.user.api.UserStoreException;
+import org.wso2.carbon.user.core.util.UserCoreUtil;
 import org.wso2.carbon.utils.multitenancy.MultitenantConstants;
 
 import java.security.PublicKey;
@@ -80,6 +88,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.ACCOUNT_DISABLED_ERROR_MESSAGE;
+import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.ACCOUNT_LOCKED_ERROR_MESSAGE;
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.DEFAULT_IAT_VALIDITY_PERIOD;
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_ENABLE_IAT_VALIDATION;
 import static org.wso2.carbon.identity.oauth2.grant.jwt.JWTConstants.PROP_ENABLE_JWT_CACHE;
@@ -460,6 +470,7 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
                     handleClientException("Custom Claims in the JWT were invalid");
                 }
             }
+            validateAccountState(identityProvider, subject);
             if (log.isDebugEnabled()) {
                 log.debug("JWT Token was validated successfully");
             }
@@ -479,6 +490,107 @@ public class JWTBearerGrantHandler extends AbstractAuthorizationGrantHandler {
         }
         handleCustomClaims(tokReqMsgCtx, customClaims, identityProvider);
         return true;
+    }
+
+    /**
+     * Resolve the local user account of the JWT subject and reject the grant if that account is locked or disabled.
+     * If the subject cannot be mapped to an existing local account (i.e. a federated user without an associated
+     * local account), the validation is skipped.
+     *
+     * @param identityProvider Identity Provider which issued the JWT.
+     * @param subject          Subject of the JWT.
+     * @throws IdentityOAuth2Exception If the local account is locked or disabled, or the state cannot be resolved.
+     */
+    protected void validateAccountState(IdentityProvider identityProvider, String subject)
+            throws IdentityOAuth2Exception {
+
+        String localUsername = resolveLocalUserOfSubject(identityProvider, subject);
+        if (StringUtils.isBlank(localUsername)) {
+            if (log.isDebugEnabled()) {
+                log.debug("No local user found for the subject: " + subject + " in tenant: " + tenantDomain
+                        + ". Skipping account state validation.");
+            }
+            return;
+        }
+        String username = UserCoreUtil.removeDomainFromName(localUsername);
+        String userStoreDomain = IdentityUtil.extractDomainFromName(localUsername);
+        try {
+            // Unlock time and the lock bypass role are handled by the account lock service.
+            if (OAuth2ServiceComponentHolder.getAccountLockService()
+                    .isAccountLocked(username, tenantDomain, userStoreDomain)) {
+                handleClientException(String.format(ACCOUNT_LOCKED_ERROR_MESSAGE, username, userStoreDomain,
+                        tenantDomain));
+            }
+        } catch (AccountLockServiceException e) {
+            throw new IdentityOAuth2Exception("Error while checking the account lock status of the user: "
+                    + localUsername + " in tenant: " + tenantDomain, e);
+        }
+        try {
+            if (isAccountDisablingEnabled() && OAuth2ServiceComponentHolder.getAccountDisableService()
+                    .isAccountDisabled(username, tenantDomain, userStoreDomain)) {
+                handleClientException(String.format(ACCOUNT_DISABLED_ERROR_MESSAGE, username, userStoreDomain,
+                        tenantDomain));
+            }
+        } catch (AccountDisableServiceException | FrameworkException e) {
+            throw new IdentityOAuth2Exception("Error while checking the account disable status of the user: "
+                    + localUsername + " in tenant: " + tenantDomain, e);
+        }
+        if (log.isDebugEnabled()) {
+            log.debug("Account state of the user: " + localUsername + " was validated successfully.");
+        }
+    }
+
+    /**
+     * Resolve the local user of the JWT subject. For JWTs issued by a federated IDP, the local user associated with
+     * the federated subject is looked up first. Otherwise, the subject is treated as the local username. For JWTs
+     * issued by the resident IDP, the subject is also resolved as a user ID, since that is the default subject of
+     * tokens issued by the server.
+     *
+     * @param identityProvider Identity Provider which issued the JWT.
+     * @param subject          Subject of the JWT.
+     * @return Domain qualified local username, or null if there is no local user for the subject.
+     * @throws IdentityOAuth2Exception If an error occurs while resolving the local user.
+     */
+    protected String resolveLocalUserOfSubject(IdentityProvider identityProvider, String subject)
+            throws IdentityOAuth2Exception {
+
+        String idpName = identityProvider.getIdentityProviderName();
+        boolean isResidentIdP = IdentityApplicationConstants.RESIDENT_IDP_RESERVED_NAME.equals(idpName);
+        try {
+            if (!isResidentIdP) {
+                String associatedUsername = FrameworkUtils.getFederatedAssociationManager()
+                        .getUserForFederatedAssociation(tenantDomain, idpName, subject);
+                if (StringUtils.isNotBlank(associatedUsername)) {
+                    if (log.isDebugEnabled()) {
+                        log.debug("Local user: " + associatedUsername + " is associated with the subject: "
+                                + subject + " of IDP: " + idpName);
+                    }
+                    return associatedUsername;
+                }
+            }
+            String username = subject;
+            String tenantDomainSuffix = TENANT_DOMAIN_SEPARATOR + tenantDomain;
+            if (StringUtils.endsWithIgnoreCase(subject, tenantDomainSuffix)) {
+                username = subject.substring(0, subject.length() - tenantDomainSuffix.length());
+            }
+            if (OAuth2Util.isExistingUser(username, tenantDomain)) {
+                return username;
+            }
+            if (isResidentIdP) {
+                return OAuth2Util.resolveUsernameFromUserId(tenantDomain, username);
+            }
+        } catch (FrameworkException | FederatedAssociationManagerException | UserStoreException e) {
+            throw new IdentityOAuth2Exception("Error while resolving the local user of the subject: " + subject
+                    + " of IDP: " + idpName + " in tenant: " + tenantDomain, e);
+        }
+        return null;
+    }
+
+    private boolean isAccountDisablingEnabled() throws FrameworkException {
+
+        Property accountDisableConfigProperty = FrameworkUtils.getResidentIdpConfiguration(
+                FrameworkConstants.ResidentIdpPropertyName.ACCOUNT_DISABLE_HANDLER_ENABLE_PROPERTY, tenantDomain);
+        return accountDisableConfigProperty != null && Boolean.parseBoolean(accountDisableConfigProperty.getValue());
     }
 
     /**
